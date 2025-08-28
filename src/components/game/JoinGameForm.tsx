@@ -5,17 +5,34 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 type JoinGameFormProps = {
   onStartGame: (room: string, name: string) => void;
 };
 
+const validUsernames = new Set([
+  'utkarshx', 'rehan@24', 'ayush@5926', 'Saumy', 'saumy', 'ayush@558', 'rehan ali', 'xrehan', 's', 'arpit', 
+  'o', 'gg', 'kk', 'sajid', 'VLC179', 'b', 'k', 'h', 'm', 'ayush@559', 'romitverma', 'romit verma', 'cv', 
+  'ff', 'test12345678@c.us', 'ij', 'jj', 'CSK', 'bb', 'suraj@23', 'arman@45', 'oo', 'vijomc', 'vv', 'main', 'yyt', 'uu'
+]);
+
 export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
   const [room, setRoom] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validUsernames.has(username.trim())) {
+      toast({
+        title: 'Invalid Username',
+        description: 'Please enter a valid username to join the game.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (room.trim() && name.trim()) {
       onStartGame(room.trim(), name.trim());
     }
@@ -53,6 +70,17 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
                 placeholder="e.g., 'Duelist_7'"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="font-body"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-accent">Enter Your Username</Label>
+              <Input
+                id="username"
+                placeholder="Enter your username to join"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="font-body"
                 required
               />
