@@ -9,9 +9,20 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type JoinGameFormProps = {
   onStartGame: (room: string, name: string, username: string) => void;
+  onStartSpectating: (room: string) => void;
 };
 
 const validUsernames = new Set([
@@ -22,14 +33,15 @@ const validUsernames = new Set([
 
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
-export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
+export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormProps) {
   const [room, setRoom] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
+  const [spectatorRoom, setSpectatorRoom] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
@@ -69,6 +81,38 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
     }
     setIsLoading(false);
   };
+  
+  const handleSpectateSubmit = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    if (spectatorRoom.trim()) {
+        const sRoomCode = sanitizeKey(spectatorRoom.trim());
+        const roomRef = ref(db, sRoomCode);
+        try {
+            const snapshot = await get(roomRef);
+            const roomData = snapshot.val();
+            if (roomData && roomData.player1 && roomData.player2 && !roomData.winner) {
+                onStartSpectating(spectatorRoom.trim());
+            } else {
+                toast({
+                    title: 'Unable to Spectate',
+                    description: 'This room is not in a running state or has already ended.',
+                    variant: 'destructive',
+                });
+            }
+        } catch (error) {
+            console.error("Firebase check failed:", error);
+            toast({
+                title: 'Connection Error',
+                description: 'Could not check room status. Please try again.',
+                variant: 'destructive',
+            });
+        }
+    }
+    setIsLoading(false);
+};
+
 
   return (
     <div className="flex flex-col items-center justify-center space-y-8">
@@ -78,7 +122,7 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
       </div>
 
       <Card className="w-full max-w-sm bg-card/80 border-primary/30">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleJoinSubmit}>
           <CardHeader>
             <CardTitle className="font-headline text-primary">Join Game</CardTitle>
             <CardDescription>Enter a room code to join or create a match.</CardDescription>
@@ -121,10 +165,41 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
               />
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex-col gap-4">
             <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading}>
               {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
             </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="w-full">View Game</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-primary font-headline">Spectate a Match</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Enter the room code of the match you want to watch.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-2">
+                    <Label htmlFor="spectator-room" className="text-accent">Room Code</Label>
+                    <Input
+                        id="spectator-room"
+                        placeholder="e.g., 'arena-123'"
+                        value={spectatorRoom}
+                        onChange={(e) => setSpectatorRoom(e.target.value)}
+                        className="font-body"
+                        required
+                        disabled={isLoading}
+                    />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogAction onClick={handleSpectateSubmit} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="animate-spin" /> : 'Spectate'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardFooter>
         </form>
       </Card>
