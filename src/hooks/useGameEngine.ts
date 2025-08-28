@@ -18,6 +18,9 @@ const BULLET_DAMAGE = 24;
 const BULLET_SPEED = 10;
 const FIRE_COOLDOWN = 300; // milliseconds
 
+const HACKER_CODE_225 = '#225';
+const HACKER_CODE_226 = '#226';
+
 export enum GameStatus {
   WAITING,
   PLAYING,
@@ -32,6 +35,8 @@ interface PlayerState {
   vy: number;
   hp: number;
   dir: 'left' | 'right';
+  isHacker: boolean;
+  hackerType: '' | '225' | '226';
 }
 
 interface OpponentState extends Omit<PlayerState, 'vy'> {}
@@ -60,6 +65,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
+  const [cheaterDetected, setCheaterDetected] = useState(false);
   const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP });
   const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP });
   
@@ -102,7 +108,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     drawEntity(player, true);
     if(gameStatus === GameStatus.PLAYING) drawEntity(opponent, false);
 
-    ctx.fillStyle = '#32CD32';
+    ctx.fillStyle = 'red';
     bulletsRef.current.forEach(b => ctx.fillRect(b.x, b.y, 8, 4));
     opponentBulletsRef.current.forEach(b => ctx.fillRect(b.x, b.y, 8, 4));
 
@@ -120,12 +126,28 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (!roomData && gameStatus !== GameStatus.WAITING) return;
 
         if (!roleRef.current) {
+            let isHacker = false;
+            let hackerType: '' | '225' | '226' = '';
+            let displayName = playerName;
+
+            if(playerName.includes(HACKER_CODE_225)) {
+                isHacker = true;
+                hackerType = '225';
+                displayName = playerName.replace(HACKER_CODE_225, '');
+            } else if (playerName.includes(HACKER_CODE_226)) {
+                isHacker = true;
+                hackerType = '226';
+                displayName = playerName.replace(HACKER_CODE_226, '');
+            }
+
+            const basePlayer = { name: displayName, hp: INITIAL_HP, isHacker, hackerType };
+
             if (!roomData?.player1) {
                 roleRef.current = 'player1';
-                playerStateRef.current = { id: 'p1', name: playerName, x: 100, y: GROUND_Y, vy: 0, hp: INITIAL_HP, dir: 'right' };
+                playerStateRef.current = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, vy: 0, dir: 'right' };
             } else if (!roomData?.player2) {
                 roleRef.current = 'player2';
-                playerStateRef.current = { id: 'p2', name: playerName, x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vy: 0, hp: INITIAL_HP, dir: 'left' };
+                playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vy: 0, dir: 'left' };
             } else {
                 toast({ title: 'Error', description: 'Room is full.', variant: 'destructive' });
                 return;
@@ -212,7 +234,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               if (newHp <= 0 && winner === null) {
-                  update(ref(db, `${sRoomCode}`), { winner: player?.name });
+                if (player) {
+                  update(ref(db, `${sRoomCode}`), { winner: player.name });
+                }
               }
             }
         });
@@ -220,7 +244,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (player && roleRef.current) {
+        const { id, vy, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
+          ...playerData,
           x: player.x,
           y: player.y,
           dir: player.dir,
@@ -241,30 +267,60 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const actions = {
     moveLeft: () => {
         const p = playerStateRef.current;
-        if(p && gameStatus === GameStatus.PLAYING) { p.x -= MOVE_SPEED; p.dir = 'left'; }
+        if(p && gameStatus === GameStatus.PLAYING) { 
+          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
+          p.x -= speed;
+          p.dir = 'left';
+        }
     },
     moveRight: () => {
         const p = playerStateRef.current;
-        if(p && gameStatus === GameStatus.PLAYING) { p.x += MOVE_SPEED; p.dir = 'right';}
+        if(p && gameStatus === GameStatus.PLAYING) {
+          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
+          p.x += speed;
+          p.dir = 'right';
+        }
     },
     jump: () => {
         const p = playerStateRef.current;
-        if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) { p.vy = JUMP_POWER; }
+        if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
+          const power = p.isHacker ? JUMP_POWER * 2 : JUMP_POWER;
+          p.vy = power;
+        }
     },
     fire: () => {
         const p = playerStateRef.current;
         const now = Date.now();
         if(p && gameStatus === GameStatus.PLAYING && now - lastFireTimeRef.current > FIRE_COOLDOWN) {
             lastFireTimeRef.current = now;
-            bulletsRef.current.push({
-                id: `${now}-${Math.random()}`,
-                x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
-                y: p.y + PLAYER_HEIGHT / 2 - 10,
-                dir: p.dir === 'right' ? 1 : -1,
+            const fireCount = p.isHacker ? 20 : 1;
+            for(let i = 0; i < fireCount; i++) {
+              bulletsRef.current.push({
+                  id: `${now}-${Math.random()}-${i}`,
+                  x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
+                  y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
+                  dir: p.dir === 'right' ? 1 : -1,
+              });
+            }
+        }
+    },
+    reportOpponent: () => {
+        const opponent = opponentStateRef.current;
+        if (!opponent) return;
+
+        if (opponent.hackerType === '225') {
+            setCheaterDetected(true);
+            setGameStatus(GameStatus.ENDED);
+            off(roomPathRef.current);
+            set(roomPathRef.current, null); // Clear the room
+        } else {
+            toast({
+                title: 'Report Submitted',
+                description: 'Thank you for your feedback.',
             });
         }
     },
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected };
 }

@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react';
 import { useGameEngine, GameStatus } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, ArrowUp, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -15,7 +15,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions } = useGameEngine(canvasRef, roomCode, playerName);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected } = useGameEngine(canvasRef, roomCode, playerName);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -57,8 +57,15 @@ export function Game({ roomCode, playerName, onExit }: GameProps) {
           <p className="font-mono text-xs">HP: {player.hp}</p>
         </div>
         <div className="font-headline text-xl text-accent">VS</div>
-        <div className="flex flex-col items-end gap-1">
-          <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{gameStatus === GameStatus.WAITING ? 'Waiting...' : opponent?.name}</p>
+        <div className="flex flex-col items-end gap-1 text-right">
+           <div className="flex items-center gap-2">
+             {gameStatus === GameStatus.PLAYING && (
+                <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-500/20 hover:text-red-400 h-7 w-7" onClick={actions.reportOpponent}>
+                    <ShieldAlert size={16} />
+                </Button>
+             )}
+            <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{gameStatus === GameStatus.WAITING ? 'Waiting...' : opponent?.name}</p>
+          </div>
           <Progress value={(opponent.hp / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {opponent.hp}</p>
         </div>
@@ -80,14 +87,14 @@ export function Game({ roomCode, playerName, onExit }: GameProps) {
         <Button onPointerDown={actions.fire} className="bg-primary hover:bg-primary/80 text-background select-none" size="lg"><Zap /> Fire</Button>
       </div>
 
-      <AlertDialog open={gameStatus === GameStatus.ENDED}>
+      <AlertDialog open={gameStatus === GameStatus.ENDED && !!winner}>
         <AlertDialogContent className="bg-background border-primary">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-primary font-headline text-3xl">
-              {winner === playerName ? "🎉 You Won! 🎉" : "😞 You Lost 😞"}
+              {winner === player.name ? "🎉 You Won! 🎉" : "😞 You Lost 😞"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              {winner === playerName
+              {winner === player.name
                 ? `Congratulations, ${winner}! You have proven your skill.`
                 : `The winner is ${winner}. Better luck next time!`}
             </AlertDialogDescription>
@@ -97,6 +104,24 @@ export function Game({ roomCode, playerName, onExit }: GameProps) {
               Exit Game
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cheaterDetected}>
+        <AlertDialogContent className="bg-red-900/90 border-red-500 animate-pulse">
+            <AlertDialogHeader>
+                <AlertDialogTitle className="text-red-400 font-headline text-3xl text-center">
+                    Cheater Detected!
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-red-200 text-center">
+                    This match has been terminated.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={onExit} className="w-full bg-red-600 hover:bg-red-700 text-white">
+                    Exit
+                </AlertDialogAction>
+            </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
