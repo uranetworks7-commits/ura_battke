@@ -5,10 +5,10 @@ import { JoinGameForm } from '@/components/game/JoinGameForm';
 import { Game } from '@/components/game/Game';
 
 export default function Home() {
-  const [gameConfig, setGameConfig] = useState<{ room: string; name: string } | null>(null);
+  const [gameConfig, setGameConfig] = useState<{ room: string; name: string; username: string } | null>(null);
 
-  const handleStartGame = (room: string, name: string) => {
-    setGameConfig({ room, name });
+  const handleStartGame = (room: string, name: string, username: string) => {
+    setGameConfig({ room, name, username });
   };
 
   const handleExit = () => {
@@ -23,7 +23,7 @@ export default function Home() {
         {!gameConfig ? (
           <JoinGameForm onStartGame={handleStartGame} />
         ) : (
-          <Game roomCode={gameConfig.room} playerName={gameConfig.name} onExit={handleExit} />
+          <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={gameConfig.username} onExit={handleExit} />
         )}
       </div>
     </main>

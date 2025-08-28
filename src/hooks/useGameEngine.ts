@@ -31,9 +31,15 @@ export enum GameStatus {
   ENDED,
 }
 
+interface WinnerInfo {
+  name: string;
+  username: string;
+  reason: 'afk' | 'elimination' | 'timeout';
+}
 interface PlayerState {
   id: string;
   name: string;
+  username: string;
   x: number;
   y: number;
   vy: number;
@@ -55,7 +61,7 @@ interface Bullet {
 
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
-export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roomCode: string, playerName: string) {
+export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roomCode: string, playerName: string, playerUsername: string) {
   const { toast } = useToast();
   const sRoomCode = sanitizeKey(roomCode);
   const roomPathRef = useRef(ref(db, sRoomCode));
@@ -79,9 +85,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
 
-  const declareWinner = useCallback((winnerName: string) => {
-    if (winner) return; // Prevent declaring winner multiple times
-    update(ref(db, sRoomCode), { winner: winnerName });
+  const declareWinner = useCallback((winnerInfo: WinnerInfo) => {
+    if (winner) return;
+    update(ref(db, sRoomCode), { winner: winnerInfo });
   }, [sRoomCode, winner]);
 
   const draw = useCallback(() => {
@@ -152,7 +158,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp() };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp() };
 
             if (!roomData?.player1) {
                 roleRef.current = 'player1';
@@ -180,7 +186,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         }
         
         if (opponentData) {
-            opponentStateRef.current = { id: opponentRole, ...opponentData, vy: 0 };
+            if (!opponentStateRef.current) { // Opponent just joined
+                opponentStateRef.current = { id: opponentRole, ...opponentData, vy: 0 };
+            } else { // Opponent state is updating
+                opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
+            }
             opponentBulletsRef.current = opponentData.bullets || [];
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
         } else {
@@ -193,10 +203,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
         if (roomData?.winner) {
             if (winner) return;
-            setWinner(roomData.winner);
+            const winnerInfo = roomData.winner;
+            setWinner(winnerInfo.name);
             setGameStatus(GameStatus.ENDED);
             off(roomPathRef.current);
-            set(roomPathRef.current, null);
+            // Don't clear the room data, so it can be reviewed.
+            // set(roomPathRef.current, null);
         }
     };
     
@@ -207,22 +219,26 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
         const playerRole = roleRef.current;
-        if (playerRole) {
+        if (playerRole && gameStatus !== GameStatus.ENDED) {
             set(ref(db, `${sRoomCode}/${playerRole}`), null);
         }
         goOffline(db);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sRoomCode, playerName, toast, gameStatus, winner, declareWinner]);
+  }, [sRoomCode, playerName, playerUsername, toast]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
+      if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
       waitingTimeoutRef.current = setTimeout(() => {
         if (gameStatus === GameStatus.WAITING && playerStateRef.current && !opponentStateRef.current) {
-          declareWinner(playerStateRef.current.name);
+           declareWinner({ name: playerStateRef.current.name, username: playerStateRef.current.username, reason: 'timeout' });
         }
       }, WAITING_TIMEOUT);
     } else {
+      if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+    }
+    return () => {
       if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
     }
   }, [gameStatus, declareWinner]);
@@ -233,28 +249,25 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       return;
     }
   
-    const checkAfk = () => {
-      if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
-  
-      afkTimeoutRef.current = setTimeout(() => {
-        const opponent = opponentStateRef.current;
-        const player = playerStateRef.current;
-  
-        if (player && !winner) {
-          const now = Date.now();
-          const opponentIsAfk = !opponent || (opponent.lastUpdate && (now - new Date(opponent.lastUpdate).getTime() > AFK_TIMEOUT));
-          
-          if (opponentIsAfk) {
-            declareWinner(player.name);
-          } else {
-            // If the opponent is not AFK, schedule the next check
-            checkAfk();
-          }
-        }
-      }, AFK_TIMEOUT + 1000); // Check slightly after the AFK period
+    const resetAfkTimeout = () => {
+        if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
+        afkTimeoutRef.current = setTimeout(() => {
+            const player = playerStateRef.current;
+            const opponent = opponentStateRef.current;
+            const now = Date.now();
+            
+            if (player && !winner) {
+                const opponentLastUpdate = opponent?.lastUpdate ? new Date(opponent.lastUpdate).getTime() : 0;
+                if (!opponent || (opponentLastUpdate && now - opponentLastUpdate > AFK_TIMEOUT)) {
+                    declareWinner({ name: player.name, username: player.username, reason: 'afk' });
+                } else {
+                    resetAfkTimeout();
+                }
+            }
+        }, AFK_TIMEOUT + 1000); // Check slightly after AFK timeout
     };
-  
-    checkAfk(); // Start the first check
+
+    resetAfkTimeout();
   
     return () => {
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
@@ -264,18 +277,20 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   useEffect(() => {
     let animationFrameId: number;
     const gameLoop = () => {
-      if (gameStatus !== GameStatus.PLAYING) return;
+      if (gameStatus !== GameStatus.PLAYING || !playerStateRef.current) {
+        if(animationFrameId) cancelAnimationFrame(animationFrameId);
+        return;
+      }
       
       const player = playerStateRef.current;
-      if (player) {
-          player.vy += GRAVITY;
-          player.y += player.vy;
-          if (player.y >= GROUND_Y) {
-              player.y = GROUND_Y;
-              player.vy = 0;
-          }
-          player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
+      
+      player.vy += GRAVITY;
+      player.y += player.vy;
+      if (player.y >= GROUND_Y) {
+          player.y = GROUND_Y;
+          player.vy = 0;
       }
+      player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
       
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
 
@@ -293,14 +308,14 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               if (newHp <= 0 && playerStateRef.current) {
-                  declareWinner(playerStateRef.current.name);
+                  declareWinner({ name: playerStateRef.current.name, username: playerStateRef.current.username, reason: 'elimination'});
               }
             }
         });
         if(bulletsToRemove.size > 0) bulletsRef.current = bulletsRef.current.filter(b => !bulletsToRemove.has(b.id));
       }
 
-      if (player && roleRef.current) {
+      if (roleRef.current) {
         const { id, vy, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           ...playerData,

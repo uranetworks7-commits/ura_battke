@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
 type JoinGameFormProps = {
-  onStartGame: (room: string, name: string) => void;
+  onStartGame: (room: string, name: string, username: string) => void;
 };
 
 const validUsernames = new Set([
@@ -34,7 +34,7 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
       return;
     }
     if (room.trim() && name.trim()) {
-      onStartGame(room.trim(), name.trim());
+      onStartGame(room.trim(), name.trim(), username.trim());
     }
   };
 

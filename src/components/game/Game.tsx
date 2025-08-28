@@ -10,12 +10,13 @@ import { Progress } from '@/components/ui/progress';
 type GameProps = {
   roomCode: string;
   playerName: string;
+  playerUsername: string;
   onExit: () => void;
 };
 
-export function Game({ roomCode, playerName, onExit }: GameProps) {
+export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected } = useGameEngine(canvasRef, roomCode, playerName);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
