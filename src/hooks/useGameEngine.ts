@@ -14,7 +14,8 @@ const GRAVITY = 2;
 const JUMP_POWER = -25;
 const MOVE_SPEED = 20;
 const INITIAL_HP = 1800;
-const BULLET_DAMAGE = 24;
+const NORMAL_BULLET_DAMAGE = 24;
+const HACKER_BULLET_DAMAGE = 100;
 const BULLET_SPEED = 10;
 const FIRE_COOLDOWN = 300; // milliseconds
 
@@ -162,10 +163,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const myData = roomData?.[roleRef.current!];
         const opponentData = roomData?.[opponentRole];
 
-        if (myData) {
-            if(playerStateRef.current) {
-              playerStateRef.current.hp = myData.hp;
-            }
+        if (myData && playerStateRef.current) {
+            // Preserve local physics state (vy) while updating from DB
+            playerStateRef.current = {
+                ...playerStateRef.current,
+                ...myData,
+            };
             setPlayerUI({ name: myData.name, hp: myData.hp });
         }
         
@@ -230,7 +233,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bullet.y < opponent.y + PLAYER_HEIGHT && bullet.y + 4 > opponent.y
             ) {
               bulletsToRemove.add(bullet.id);
-              const newHp = Math.max(0, opponent.hp - BULLET_DAMAGE);
+              const damage = playerStateRef.current?.isHacker ? HACKER_BULLET_DAMAGE : NORMAL_BULLET_DAMAGE;
+              const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               if (newHp <= 0 && winner === null) {
