@@ -137,11 +137,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         }
 
         const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
-        const myData = roomData?.[roleRef.current];
+        const myData = roomData?.[roleRef.current!];
         const opponentData = roomData?.[opponentRole];
 
         if (myData) {
-            if(playerStateRef.current) playerStateRef.current.hp = myData.hp;
+            if(playerStateRef.current) {
+              playerStateRef.current.hp = myData.hp;
+            }
             setPlayerUI({ name: myData.name, hp: myData.hp });
         }
         
@@ -149,6 +151,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = { id: opponentRole, ...opponentData, vy: 0 };
             opponentBulletsRef.current = opponentData.bullets || [];
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
+        } else {
+            opponentStateRef.current = null;
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -208,7 +212,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               if (newHp <= 0 && winner === null) {
-                  set(ref(db, `${sRoomCode}/winner`), player?.name);
+                  update(ref(db, `${sRoomCode}`), { winner: player?.name });
               }
             }
         });
