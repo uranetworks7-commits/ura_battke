@@ -175,10 +175,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            playerStateRef.current = {
-                ...playerStateRef.current,
-                ...myData,
-            };
+            playerStateRef.current.hp = myData.hp; // Only sync HP from db, rest is controlled locally
             setPlayerUI({ name: myData.name, hp: myData.hp });
         }
         
@@ -187,10 +184,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentBulletsRef.current = opponentData.bullets || [];
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
         } else {
-            // Opponent disconnected
-            if(gameStatus === GameStatus.PLAYING && playerStateRef.current && !winner) {
-                declareWinner(playerStateRef.current.name);
-            }
             opponentStateRef.current = null;
         }
         
@@ -225,7 +218,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
       waitingTimeoutRef.current = setTimeout(() => {
-        if (gameStatus === GameStatus.WAITING && playerStateRef.current) {
+        if (gameStatus === GameStatus.WAITING && playerStateRef.current && !opponentStateRef.current) {
           declareWinner(playerStateRef.current.name);
         }
       }, WAITING_TIMEOUT);
@@ -239,24 +232,30 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
       return;
     }
-
+  
     const checkAfk = () => {
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
-
+  
       afkTimeoutRef.current = setTimeout(() => {
         const opponent = opponentStateRef.current;
         const player = playerStateRef.current;
-        if (opponent && player && !winner) {
+  
+        if (player && !winner) {
           const now = Date.now();
-          if (now - new Date(opponent.lastUpdate).getTime() > AFK_TIMEOUT) {
+          const opponentIsAfk = !opponent || (opponent.lastUpdate && (now - new Date(opponent.lastUpdate).getTime() > AFK_TIMEOUT));
+          
+          if (opponentIsAfk) {
             declareWinner(player.name);
+          } else {
+            // If the opponent is not AFK, schedule the next check
+            checkAfk();
           }
         }
       }, AFK_TIMEOUT + 1000); // Check slightly after the AFK period
     };
-
-    checkAfk();
-    
+  
+    checkAfk(); // Start the first check
+  
     return () => {
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
     };
