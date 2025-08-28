@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { ref, onValue, set, update, onDisconnect, goOffline, goOnline, off } from 'firebase/database';
+import { ref, onValue, set, update, onDisconnect, goOffline, goOnline, off, serverTimestamp } from 'firebase/database';
 import { useToast } from './use-toast';
 
 const CANVAS_WIDTH = 800;
@@ -22,6 +22,9 @@ const FIRE_COOLDOWN = 300; // milliseconds
 const HACKER_CODE_225 = '#225';
 const HACKER_CODE_226 = '#226';
 
+const WAITING_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const AFK_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+
 export enum GameStatus {
   WAITING,
   PLAYING,
@@ -38,6 +41,7 @@ interface PlayerState {
   dir: 'left' | 'right';
   isHacker: boolean;
   hackerType: '' | '225' | '226';
+  lastUpdate: any;
 }
 
 interface OpponentState extends Omit<PlayerState, 'vy'> {}
@@ -63,6 +67,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const bulletsRef = useRef<Bullet[]>([]);
   const opponentBulletsRef = useRef<Bullet[]>([]);
   const lastFireTimeRef = useRef(0);
+  const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const afkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
@@ -72,6 +78,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
+
+  const declareWinner = useCallback((winnerName: string) => {
+    if (winner) return; // Prevent declaring winner multiple times
+    update(ref(db, sRoomCode), { winner: winnerName });
+  }, [sRoomCode, winner]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -141,7 +152,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, hp: INITIAL_HP, isHacker, hackerType };
+            const basePlayer = { name: displayName, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp() };
 
             if (!roomData?.player1) {
                 roleRef.current = 'player1';
@@ -164,7 +175,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            // Preserve local physics state (vy) while updating from DB
             playerStateRef.current = {
                 ...playerStateRef.current,
                 ...myData,
@@ -177,6 +187,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentBulletsRef.current = opponentData.bullets || [];
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
         } else {
+            // Opponent disconnected
+            if(gameStatus === GameStatus.PLAYING && playerStateRef.current && !winner) {
+                declareWinner(playerStateRef.current.name);
+            }
             opponentStateRef.current = null;
         }
         
@@ -196,6 +210,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     onValue(roomPathRef.current, handleRoomValue);
 
     return () => {
+        if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+        if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
         const playerRole = roleRef.current;
         if (playerRole) {
@@ -204,8 +220,48 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         goOffline(db);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sRoomCode, playerName, toast]);
+  }, [sRoomCode, playerName, toast, gameStatus, winner, declareWinner]);
   
+   useEffect(() => {
+    if (gameStatus === GameStatus.WAITING) {
+      waitingTimeoutRef.current = setTimeout(() => {
+        if (gameStatus === GameStatus.WAITING && playerStateRef.current) {
+          declareWinner(playerStateRef.current.name);
+        }
+      }, WAITING_TIMEOUT);
+    } else {
+      if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+    }
+  }, [gameStatus, declareWinner]);
+
+  useEffect(() => {
+    if (gameStatus !== GameStatus.PLAYING) {
+      if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
+      return;
+    }
+
+    const checkAfk = () => {
+      if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
+
+      afkTimeoutRef.current = setTimeout(() => {
+        const opponent = opponentStateRef.current;
+        const player = playerStateRef.current;
+        if (opponent && player && !winner) {
+          const now = Date.now();
+          if (now - new Date(opponent.lastUpdate).getTime() > AFK_TIMEOUT) {
+            declareWinner(player.name);
+          }
+        }
+      }, AFK_TIMEOUT + 1000); // Check slightly after the AFK period
+    };
+
+    checkAfk();
+    
+    return () => {
+      if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
+    };
+  }, [gameStatus, declareWinner, winner]);
+
   useEffect(() => {
     let animationFrameId: number;
     const gameLoop = () => {
@@ -237,10 +293,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
-              if (newHp <= 0 && winner === null) {
-                if (player) {
-                  update(ref(db, `${sRoomCode}`), { winner: player.name });
-                }
+              if (newHp <= 0 && playerStateRef.current) {
+                  declareWinner(playerStateRef.current.name);
               }
             }
         });
@@ -255,6 +309,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           y: player.y,
           dir: player.dir,
           bullets: bulletsRef.current,
+          lastUpdate: serverTimestamp()
         });
       }
 
@@ -266,13 +321,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       animationFrameId = requestAnimationFrame(gameLoop);
     }
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameStatus, draw, sRoomCode, winner]);
+  }, [gameStatus, draw, sRoomCode, declareWinner]);
 
   const actions = {
     moveLeft: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) { 
-          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
+          const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x -= speed;
           p.dir = 'left';
         }
@@ -280,7 +335,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveRight: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) {
-          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
+          const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x += speed;
           p.dir = 'right';
         }
@@ -288,7 +343,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     jump: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
-          const power = p.isHacker ? JUMP_POWER * 2 : JUMP_POWER;
+          const power = p.isHacker && p.hackerType === '225' ? JUMP_POWER * 2 : JUMP_POWER;
           p.vy = power;
         }
     },
@@ -297,7 +352,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const now = Date.now();
         if(p && gameStatus === GameStatus.PLAYING && now - lastFireTimeRef.current > FIRE_COOLDOWN) {
             lastFireTimeRef.current = now;
-            const fireCount = p.isHacker ? 20 : 1;
+            const fireCount = p.isHacker && p.hackerType === '225' ? 20 : 1;
             for(let i = 0; i < fireCount; i++) {
               bulletsRef.current.push({
                   id: `${now}-${Math.random()}-${i}`,
