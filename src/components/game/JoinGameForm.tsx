@@ -112,7 +112,7 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
     <Button
       variant="ghost"
       className={cn(
-        "font-headline text-lg",
+        "font-headline text-lg p-2 h-auto",
         activeMode === targetMode ? 'text-primary bg-primary/10' : 'text-muted-foreground'
       )}
       onClick={() => setMode(targetMode)}
@@ -131,9 +131,9 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
       <Card className="w-full max-w-sm bg-transparent border-0 shadow-none">
         <CardHeader className="p-0 mb-4">
             <div className="flex justify-center bg-black/20 rounded-lg p-1 border border-primary/20">
-              <ModeButton activeMode={mode} targetMode="game"><Gamepad2 />Game Mode</ModeButton>
-              <ModeButton activeMode={mode} targetMode="view"><Eye />View Mode</ModeButton>
-              <ModeButton activeMode={mode} targetMode="manual"><BookOpen />Manual</ModeButton>
+              <ModeButton activeMode={mode} targetMode="game"><Gamepad2 /></ModeButton>
+              <ModeButton activeMode={mode} targetMode="view"><Eye /></ModeButton>
+              <ModeButton activeMode={mode} targetMode="manual"><BookOpen /></ModeButton>
             </div>
         </CardHeader>
         <CardContent className="p-0">
