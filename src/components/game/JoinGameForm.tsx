@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { ref, get } from 'firebase/database';
+import { Loader2 } from 'lucide-react';
 
 type JoinGameFormProps = {
   onStartGame: (room: string, name: string, username: string) => void;
@@ -17,25 +20,54 @@ const validUsernames = new Set([
   'ff', 'test12345678@c.us', 'ij', 'jj', 'CSK', 'bb', 'suraj@23', 'arman@45', 'oo', 'vijomc', 'vv', 'main', 'yyt', 'uu'
 ]);
 
+const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
+
 export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
   const [room, setRoom] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+
     if (!validUsernames.has(username.trim())) {
       toast({
         title: 'Invalid Username',
         description: 'Please enter a valid username to join the game.',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
+
     if (room.trim() && name.trim()) {
-      onStartGame(room.trim(), name.trim(), username.trim());
+      const sRoomCode = sanitizeKey(room.trim());
+      const roomRef = ref(db, sRoomCode);
+      try {
+        const snapshot = await get(roomRef);
+        const roomData = snapshot.val();
+        if (roomData && roomData.player1 && roomData.player2) {
+            toast({
+                title: 'Room is Full',
+                description: 'This room already has two players.',
+                variant: 'destructive',
+            });
+        } else {
+            onStartGame(room.trim(), name.trim(), username.trim());
+        }
+      } catch (error) {
+        console.error("Firebase check failed:", error);
+        toast({
+            title: 'Connection Error',
+            description: 'Could not check room status. Please try again.',
+            variant: 'destructive',
+        });
+      }
     }
+    setIsLoading(false);
   };
 
   return (
@@ -61,6 +93,7 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
                 onChange={(e) => setRoom(e.target.value)}
                 className="font-body"
                 required
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -72,6 +105,7 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
                 onChange={(e) => setName(e.target.value)}
                 className="font-body"
                 required
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -83,12 +117,13 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
                 onChange={(e) => setUsername(e.target.value)}
                 className="font-body"
                 required
+                disabled={isLoading}
               />
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background">
-              Start
+            <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
             </Button>
           </CardFooter>
         </form>
@@ -99,6 +134,7 @@ export function JoinGameForm({ onStartGame }: JoinGameFormProps) {
         <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
             <li>Each player has 1800 HP.</li>
             <li>A single bullet deals 24 damage.</li>
+            <li>Hacker bullet deals 100 damage.</li>
             <li>The first player to reduce their opponent's HP to 0 wins.</li>
             <li>Use on-screen controls or keyboard (Arrows/WASD, Space, Enter/F).</li>
         </ul>

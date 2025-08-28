@@ -60,7 +60,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
         <div className="font-headline text-xl text-accent">VS</div>
         <div className="flex flex-col items-end gap-1 text-right">
            <div className="flex items-center gap-2">
-             {gameStatus === GameStatus.PLAYING && (
+             {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
                 <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-500/20 hover:text-red-400 h-7 w-7" onClick={actions.reportOpponent}>
                     <ShieldAlert size={16} />
                 </Button>
