@@ -8,17 +8,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
-import { Loader2 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { Loader2, Gamepad2, Eye, BookOpen } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 
 type JoinGameFormProps = {
   onStartGame: (room: string, name: string, username: string) => void;
@@ -33,7 +25,10 @@ const validUsernames = new Set([
 
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
+type Mode = 'game' | 'view' | 'manual';
+
 export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormProps) {
+  const [mode, setMode] = useState<Mode>('game');
   const [room, setRoom] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -82,7 +77,7 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
     setIsLoading(false);
   };
   
-  const handleSpectateSubmit = async (e: React.MouseEvent) => {
+  const handleSpectateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
@@ -111,109 +106,110 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
         }
     }
     setIsLoading(false);
-};
-
+  };
+  
+  const ModeButton = ({ activeMode, targetMode, children }: { activeMode: Mode, targetMode: Mode, children: React.ReactNode }) => (
+    <Button
+      variant="ghost"
+      className={cn(
+        "font-headline text-lg",
+        activeMode === targetMode ? 'text-primary bg-primary/10' : 'text-muted-foreground'
+      )}
+      onClick={() => setMode(targetMode)}
+    >
+      {children}
+    </Button>
+  );
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-8">
+    <div className="flex flex-col items-center justify-center space-y-6">
       <div className="text-center">
         <h1 className="text-5xl font-headline font-bold text-primary animate-pulse">1v1 Arena Duel</h1>
         <p className="text-muted-foreground mt-2">Enter a room code and nickname to begin.</p>
       </div>
-
-      <Card className="w-full max-w-sm bg-card/80 border-primary/30">
-        <form onSubmit={handleJoinSubmit}>
-          <CardHeader>
-            <CardTitle className="font-headline text-primary">Join Game</CardTitle>
-            <CardDescription>Enter a room code to join or create a match.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="room" className="text-accent">Room Code</Label>
-              <Input
-                id="room"
-                placeholder="e.g., 'arena-123'"
-                value={room}
-                onChange={(e) => setRoom(e.target.value)}
-                className="font-body"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-accent">Your Nickname</Label>
-              <Input
-                id="name"
-                placeholder="e.g., 'Duelist_7'"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="font-body"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-accent">Enter Your Username</Label>
-              <Input
-                id="username"
-                placeholder="Enter your username to join"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="font-body"
-                required
-                disabled={isLoading}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex-col gap-4">
-            <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
-            </Button>
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="w-full">View Game</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-primary font-headline">Spectate a Match</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Enter the room code of the match you want to watch.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="space-y-2">
-                    <Label htmlFor="spectator-room" className="text-accent">Room Code</Label>
-                    <Input
-                        id="spectator-room"
-                        placeholder="e.g., 'arena-123'"
-                        value={spectatorRoom}
-                        onChange={(e) => setSpectatorRoom(e.target.value)}
-                        className="font-body"
-                        required
-                        disabled={isLoading}
-                    />
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogAction onClick={handleSpectateSubmit} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="animate-spin" /> : 'Spectate'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardFooter>
-        </form>
-      </Card>
       
-      <div className="text-left max-w-md p-4 bg-muted/20 rounded-lg border border-accent/20">
-        <h3 className="font-headline text-accent mb-2 text-lg">🎮 Game Manual</h3>
-        <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
-            <li>Each player has 1800 HP.</li>
-            <li>A single bullet deals 24 damage.</li>
-            <li>Hacker bullet deals 100 damage.</li>
-            <li>The first player to reduce their opponent's HP to 0 wins.</li>
-            <li>Use on-screen controls or keyboard (Arrows/WASD, Space, Enter/F).</li>
-        </ul>
-      </div>
+      <Card className="w-full max-w-sm bg-transparent border-0 shadow-none">
+        <CardHeader className="p-0 mb-4">
+            <div className="flex justify-center bg-black/20 rounded-lg p-1 border border-primary/20">
+              <ModeButton activeMode={mode} targetMode="game"><Gamepad2 />Game Mode</ModeButton>
+              <ModeButton activeMode={mode} targetMode="view"><Eye />View Mode</ModeButton>
+              <ModeButton activeMode={mode} targetMode="manual"><BookOpen />Manual</ModeButton>
+            </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {mode === 'game' && (
+              <Card className="w-full bg-card/80 border-primary/30">
+                <form onSubmit={handleJoinSubmit}>
+                  <CardHeader>
+                    <CardTitle className="font-headline text-primary">Join Game</CardTitle>
+                    <CardDescription>Enter a room code to join or create a match.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="room" className="text-accent">Room Code</Label>
+                      <Input id="room" placeholder="e.g., 'arena-123'" value={room} onChange={(e) => setRoom(e.target.value)} className="font-body" required disabled={isLoading} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="text-accent">Your Nickname</Label>
+                      <Input id="name" placeholder="e.g., 'Duelist_7'" value={name} onChange={(e) => setName(e.target.value)} className="font-body" required disabled={isLoading} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="username" className="text-accent">Enter Your Username</Label>
+                      <Input id="username" placeholder="Enter your username to join" value={username} onChange={(e) => setUsername(e.target.value)} className="font-body" required disabled={isLoading} />
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading}>
+                      {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </Card>
+          )}
+
+          {mode === 'view' && (
+            <Card className="w-full bg-card/80 border-primary/30">
+                <form onSubmit={handleSpectateSubmit}>
+                  <CardHeader>
+                    <CardTitle className="font-headline text-primary">Spectate Match</CardTitle>
+                    <CardDescription>Enter the room code of a match to watch.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="spectator-room" className="text-accent">Room Code</Label>
+                        <Input
+                            id="spectator-room"
+                            placeholder="e.g., 'arena-123'"
+                            value={spectatorRoom}
+                            onChange={(e) => setSpectatorRoom(e.target.value)}
+                            className="font-body"
+                            required
+                            disabled={isLoading}
+                        />
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full font-headline" variant="secondary" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="animate-spin" /> : 'Spectate'}
+                    </Button>
+                  </CardFooter>
+                </form>
+            </Card>
+          )}
+
+          {mode === 'manual' && (
+            <div className="text-left max-w-md mx-auto p-4 bg-muted/20 rounded-lg border border-accent/20">
+                <h3 className="font-headline text-accent mb-2 text-lg">🎮 Game Manual</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+                    <li>Each player has 1800 HP.</li>
+                    <li>A single bullet deals 24 damage.</li>
+                    <li>The first player to reduce their opponent's HP to 0 wins.</li>
+                    <li>Use on-screen controls or keyboard (Arrows/WASD, Space, Enter/F).</li>
+                </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

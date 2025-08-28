@@ -22,8 +22,6 @@ export default function Home() {
   const handleExit = () => {
     setGameConfig(null);
     setSpectatorConfig(null);
-    // This will effectively reload the page to the join screen state.
-    window.location.reload();
   };
 
   return (

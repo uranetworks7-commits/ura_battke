@@ -134,16 +134,16 @@ export function Spectator({ roomCode, onExit }: SpectatorProps) {
       <div className="w-full flex justify-between items-center text-sm sm:text-base px-2">
         <div className="flex flex-col items-start gap-1">
           <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{player1?.name || 'Player 1'}</p>
-          <Progress value={(player1?.hp || 0 / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
-          <p className="font-mono text-xs">HP: {player1?.hp || 'N/A'}</p>
+          <Progress value={((player1?.hp || 0) / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
+          <p className="font-mono text-xs">HP: {player1?.hp ?? 'N/A'}</p>
         </div>
         <div className="font-headline text-xl text-accent">SPECTATING</div>
         <div className="flex flex-col items-end gap-1 text-right">
            <div className="flex items-center gap-2">
             <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{player2?.name || 'Player 2'}</p>
           </div>
-          <Progress value={(player2?.hp || 0 / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
-          <p className="font-mono text-xs">HP: {player2?.hp || 'N/A'}</p>
+          <Progress value={((player2?.hp || 0) / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
+          <p className="font-mono text-xs">HP: {player2?.hp ?? 'N/A'}</p>
         </div>
       </div>
       
@@ -159,7 +159,7 @@ export function Spectator({ roomCode, onExit }: SpectatorProps) {
 
       <div className="flex space-x-2">
         <Button onClick={onExit} variant="destructive" className="font-headline" size="lg">
-            <XCircle /> Exit Spectator Mode
+            <XCircle /> Exit
         </Button>
       </div>
     </div>
