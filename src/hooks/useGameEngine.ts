@@ -131,7 +131,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 return;
             }
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
-            set(myRef, { ...playerStateRef.current, vy: undefined, id: undefined });
+            const { id, vy, ...playerData } = playerStateRef.current || {};
+            set(myRef, playerData);
             onDisconnect(myRef).remove();
         }
 
