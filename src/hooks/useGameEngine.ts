@@ -167,7 +167,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 roleRef.current = 'player2';
                 playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vy: 0, dir: 'left' };
             } else {
-                toast({ title: 'Error', description: 'Room is full.', variant: 'destructive' });
                 return;
             }
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
@@ -181,13 +180,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            playerStateRef.current.hp = myData.hp; // Only sync HP from db, rest is controlled locally
+            // This was the source of the bug. The local state is the authority.
+            // We only need to read the opponent's actions against us.
+            // playerStateRef.current.hp = myData.hp; 
             setPlayerUI({ name: myData.name, hp: myData.hp });
         }
         
         if (opponentData) {
             if (!opponentStateRef.current) { // Opponent just joined
-                opponentStateRef.current = { id: opponentRole, ...opponentData, vy: 0 };
+                opponentStateRef.current = { id: opponentRole, ...opponentData };
             } else { // Opponent state is updating
                 opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
             }
@@ -207,8 +208,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             setWinner(winnerInfo.name);
             setGameStatus(GameStatus.ENDED);
             off(roomPathRef.current);
-            // Don't clear the room data, so it can be reviewed.
-            // set(roomPathRef.current, null);
         }
     };
     
@@ -220,7 +219,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         off(roomPathRef.current, 'value', handleRoomValue);
         const playerRole = roleRef.current;
         if (playerRole && gameStatus !== GameStatus.ENDED) {
-            set(ref(db, `${sRoomCode}/${playerRole}`), null);
+            const roomRef = ref(db, `${sRoomCode}/${playerRole}`);
+            set(roomRef, null);
         }
         goOffline(db);
     };
@@ -278,7 +278,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     let animationFrameId: number;
     const gameLoop = () => {
       if (gameStatus !== GameStatus.PLAYING || !playerStateRef.current) {
-        if(animationFrameId) cancelAnimationFrame(animationFrameId);
+        draw();
+        animationFrameId = requestAnimationFrame(gameLoop);
         return;
       }
       
@@ -303,12 +304,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bullet.y < opponent.y + PLAYER_HEIGHT && bullet.y + 4 > opponent.y
             ) {
               bulletsToRemove.add(bullet.id);
-              const damage = playerStateRef.current?.isHacker ? HACKER_BULLET_DAMAGE : NORMAL_BULLET_DAMAGE;
+              const damage = player.isHacker ? HACKER_BULLET_DAMAGE : NORMAL_BULLET_DAMAGE;
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
-              if (newHp <= 0 && playerStateRef.current) {
-                  declareWinner({ name: playerStateRef.current.name, username: playerStateRef.current.username, reason: 'elimination'});
+              if (newHp <= 0 && player) {
+                  declareWinner({ name: player.name, username: player.username, reason: 'elimination'});
               }
             }
         });
@@ -316,7 +317,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, ...playerData } = player;
+        const { id, vy, hp, ...playerData } = player; // Don't send local HP up, it's set by opponent's client
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           ...playerData,
           x: player.x,
@@ -331,9 +332,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
-    if (gameStatus === GameStatus.PLAYING) {
-      animationFrameId = requestAnimationFrame(gameLoop);
-    }
+    animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
   }, [gameStatus, draw, sRoomCode, declareWinner]);
 
