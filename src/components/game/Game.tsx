@@ -1,11 +1,13 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import { useGameEngine, GameStatus } from '@/hooks/useGameEngine';
+import { useRef, useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useGameEngine, GameStatus, GunChoice } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 type GameProps = {
   roomCode: string;
@@ -17,6 +19,12 @@ type GameProps = {
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const [selectedGun, setSelectedGun] = useState<GunChoice>('ak');
+
+  const handleGunSelect = (gun: GunChoice) => {
+    setSelectedGun(gun);
+    actions.selectGun(gun);
+  }
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -51,19 +59,41 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
   return (
     <div className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 gap-4 w-full h-full max-w-7xl mx-auto">
-      {/* Top Bar: Players Info */}
-      <div className="w-full flex justify-between items-center text-sm sm:text-base px-2 pt-2">
+      {/* Top Bar: Players Info & Gun Selection */}
+      <div className="w-full flex justify-between items-start text-sm sm:text-base px-2 pt-2 gap-2">
         <div className="flex flex-col items-start gap-1 w-2/5">
           <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
         </div>
-        <div className="flex-shrink-0 text-center">
+
+        <div className="flex-shrink-0 text-center flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div
+                className={cn(
+                  'p-1 rounded-md cursor-pointer border-2',
+                  selectedGun === 'ak' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+                )}
+                onClick={() => handleGunSelect('ak')}
+              >
+                <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={64} height={32} className="w-16 h-8 object-contain" />
+              </div>
+              <div
+                className={cn(
+                  'p-1 rounded-md cursor-pointer border-2',
+                  selectedGun === 'awm' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+                )}
+                onClick={() => handleGunSelect('awm')}
+              >
+                <Image src="https://i.postimg.cc/zvsCLRjN/1756463659972.png" alt="AWM" width={64} height={32} className="w-16 h-8 object-contain" />
+              </div>
+            </div>
             <p className="font-headline text-2xl text-accent">VS</p>
-             <Button variant="ghost" size="icon" onClick={actions.toggleMute} className="text-white hover:bg-white/10 h-8 w-8 mt-1">
+            <Button variant="ghost" size="icon" onClick={actions.toggleMute} className="text-white hover:bg-white/10 h-8 w-8">
                 {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-             </Button>
+            </Button>
         </div>
+
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
            <div className="flex items-center justify-end gap-2 w-full">
              {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (

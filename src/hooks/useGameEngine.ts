@@ -14,10 +14,19 @@ const GRAVITY = 2;
 const JUMP_POWER = -25;
 const MOVE_SPEED = 20;
 const INITIAL_HP = 1800;
-const NORMAL_BULLET_DAMAGE = 24;
-const HACKER_BULLET_DAMAGE = 100;
-const BULLET_SPEED = 10;
-const FIRE_COOLDOWN = 300; // milliseconds
+
+const GUNS = {
+  ak: {
+    damage: 24,
+    cooldown: 300,
+    bulletColor: 'red',
+  },
+  awm: {
+    damage: 84,
+    cooldown: 1600,
+    bulletColor: '#00FF00', // Stylish green
+  },
+};
 
 const HACKER_CODE_225 = '#225';
 const HACKER_CODE_226 = '#226';
@@ -30,6 +39,8 @@ export enum GameStatus {
   PLAYING,
   ENDED,
 }
+
+export type GunChoice = 'ak' | 'awm';
 
 interface PlayerDetails {
   name: string;
@@ -54,15 +65,19 @@ interface PlayerState {
   isHacker: boolean;
   hackerType: '' | '225' | '226';
   lastUpdate: any;
+  gun: GunChoice;
 }
 
-interface OpponentState extends Omit<PlayerState, 'vy'> {}
+interface OpponentState extends Omit<PlayerState, 'vy'> {
+    bullets?: Bullet[];
+}
 
 interface Bullet {
   id: string;
   x: number;
   y: number;
   dir: number;
+  gun: GunChoice;
 }
 
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
@@ -93,20 +108,21 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const playerImgRef = useRef<HTMLImageElement | null>(null);
 
   const audioRefs = useRef<{
-    fire?: HTMLAudioElement;
+    ak_fire?: HTMLAudioElement;
+    awm_fire?: HTMLAudioElement;
   }>({});
 
   useEffect(() => {
-    // Correct way to handle audio URLs
-    audioRefs.current.fire = new Audio('https://files.catbox.moe/uxsgkh.mp3');
-    if (audioRefs.current.fire) {
-        audioRefs.current.fire.volume = 0.5;
-    }
+    audioRefs.current.ak_fire = new Audio('https://files.catbox.moe/uxsgkh.mp3');
+    audioRefs.current.awm_fire = new Audio('https://files.catbox.moe/dvxhe8.mp3');
+    if (audioRefs.current.ak_fire) audioRefs.current.ak_fire.volume = 0.5;
+    if (audioRefs.current.awm_fire) audioRefs.current.awm_fire.volume = 0.5;
   }, []);
 
   useEffect(() => {
-    const { fire } = audioRefs.current;
-    if (fire) fire.muted = isMuted;
+    const { ak_fire, awm_fire } = audioRefs.current;
+    if (ak_fire) ak_fire.muted = isMuted;
+    if (awm_fire) awm_fire.muted = isMuted;
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
@@ -169,12 +185,19 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
     };
     
+    const drawBullets = (bullets: Bullet[] | undefined) => {
+        if (!bullets) return;
+        bullets.forEach(b => {
+          ctx.fillStyle = GUNS[b.gun].bulletColor;
+          ctx.fillRect(b.x, b.y, 8, 4)
+        });
+    }
+
     drawEntity(player, true);
     if(gameStatus === GameStatus.PLAYING) drawEntity(opponent, false);
 
-    ctx.fillStyle = 'red';
-    bulletsRef.current.forEach(b => ctx.fillRect(b.x, b.y, 8, 4));
-    opponentBulletsRef.current.forEach(b => ctx.fillRect(b.x, b.y, 8, 4));
+    drawBullets(bulletsRef.current);
+    drawBullets(opponentBulletsRef.current);
 
   }, [canvasRef, gameStatus]);
   
@@ -204,7 +227,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp() };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice };
 
             if (!roomData?.player1) {
                 roleRef.current = 'player1';
@@ -339,6 +362,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
       player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
       
+      const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
 
       const opponent = opponentStateRef.current;
@@ -350,7 +374,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bullet.y < opponent.y + PLAYER_HEIGHT && bullet.y + 4 > opponent.y
             ) {
               bulletsToRemove.add(bullet.id);
-              const damage = player.isHacker ? HACKER_BULLET_DAMAGE : NORMAL_BULLET_DAMAGE;
+              const damage = player.isHacker ? 100 : GUNS[bullet.gun].damage;
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
@@ -369,6 +393,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           y: player.y,
           dir: player.dir,
           bullets: bulletsRef.current,
+          gun: player.gun,
           lastUpdate: serverTimestamp()
         });
       }
@@ -381,7 +406,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     return () => cancelAnimationFrame(animationFrameId);
   }, [gameStatus, draw, sRoomCode, declareWinner]);
   
-  const playSound = (sound: 'fire') => {
+  const playSound = (sound: 'ak_fire' | 'awm_fire') => {
     const audio = audioRefs.current[sound];
     if(audio && !isMuted) {
       audio.currentTime = 0;
@@ -416,17 +441,21 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     fire: () => {
         const p = playerStateRef.current;
         const now = Date.now();
-        if(p && gameStatus === GameStatus.PLAYING && now - lastFireTimeRef.current > FIRE_COOLDOWN) {
-            playSound('fire');
-            lastFireTimeRef.current = now;
-            const fireCount = p.isHacker ? 20 : 1;
-            for(let i = 0; i < fireCount; i++) {
-              bulletsRef.current.push({
-                  id: `${now}-${Math.random()}-${i}`,
-                  x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
-                  y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
-                  dir: p.dir === 'right' ? 1 : -1,
-              });
+        if(p && gameStatus === GameStatus.PLAYING) {
+            const gun = GUNS[p.gun];
+            if (now - lastFireTimeRef.current > gun.cooldown) {
+                playSound(`${p.gun}_fire`);
+                lastFireTimeRef.current = now;
+                const fireCount = p.isHacker ? 20 : 1;
+                for(let i = 0; i < fireCount; i++) {
+                  bulletsRef.current.push({
+                      id: `${now}-${Math.random()}-${i}`,
+                      x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
+                      y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
+                      dir: p.dir === 'right' ? 1 : -1,
+                      gun: p.gun,
+                  });
+                }
             }
         }
     },
@@ -448,6 +477,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     },
     toggleMute: () => {
         setIsMuted(prev => !prev);
+    },
+    selectGun: (gun: GunChoice) => {
+        if (playerStateRef.current) {
+            playerStateRef.current.gun = gun;
+        }
     }
   };
 
