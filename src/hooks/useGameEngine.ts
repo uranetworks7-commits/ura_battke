@@ -93,27 +93,16 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const playerImgRef = useRef<HTMLImageElement | null>(null);
 
   const audioRefs = useRef<{
-    bgMusic?: HTMLAudioElement;
     fire?: HTMLAudioElement;
   }>({});
 
   useEffect(() => {
-    // Preload audio
-    audioRefs.current.bgMusic = new Audio('https://universal-soundbank.com/sounds/2475.mp3');
-    audioRefs.current.bgMusic.loop = true;
-    audioRefs.current.bgMusic.volume = 0.3;
-
     audioRefs.current.fire = new Audio('https://universal-soundbank.com/sounds/1426.mp3');
     audioRefs.current.fire.volume = 0.5;
-    
-    return () => {
-      audioRefs.current.bgMusic?.pause();
-    }
   }, []);
 
   useEffect(() => {
-    const { bgMusic, fire } = audioRefs.current;
-    if (bgMusic) bgMusic.muted = isMuted;
+    const { fire } = audioRefs.current;
     if (fire) fire.muted = isMuted;
   }, [isMuted]);
 
@@ -290,12 +279,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }, WAITING_TIMEOUT);
     } else {
       if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
-    }
-
-    if (gameStatus === GameStatus.PLAYING) {
-        audioRefs.current.bgMusic?.play().catch(e => console.error("Autoplay prevented:", e));
-    } else {
-        audioRefs.current.bgMusic?.pause();
     }
     
     return () => {
