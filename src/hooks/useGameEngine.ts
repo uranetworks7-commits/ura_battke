@@ -37,10 +37,10 @@ interface PlayerDetails {
 }
 
 interface WinnerInfo {
-  winner: PlayerDetails;
-  reason: 'afk' | 'elimination' | 'timeout';
-  player1: PlayerDetails | null;
-  player2: PlayerDetails | null;
+    winner: PlayerDetails;
+    reason: 'afk' | 'elimination' | 'timeout';
+    player1: PlayerDetails | null;
+    player2: PlayerDetails | null;
 }
 interface PlayerState {
   id: string;
@@ -100,14 +100,14 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   useEffect(() => {
     // Preload audio
-    audioRefs.current.bgMusic = new Audio('https://cdn.pixabay.com/audio/2022/10/26/audio_39a4f4d543.mp3');
+    audioRefs.current.bgMusic = new Audio('https://universal-soundbank.com/sounds/2475.mp3');
     audioRefs.current.bgMusic.loop = true;
     audioRefs.current.bgMusic.volume = 0.3;
 
-    audioRefs.current.fire = new Audio('https://cdn.pixabay.com/audio/2021/08/04/audio_a133139343.mp3');
+    audioRefs.current.fire = new Audio('https://universal-soundbank.com/sounds/1426.mp3');
     audioRefs.current.fire.volume = 0.5;
 
-    audioRefs.current.move = new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_731c518b33.mp3');
+    audioRefs.current.move = new Audio('https://universal-soundbank.com/sounds/16766.mp3');
     audioRefs.current.move.volume = 0.6;
     
     return () => {
@@ -238,9 +238,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const myData = roomData?.[roleRef.current!];
         const opponentData = roomData?.[opponentRole];
 
-        if (myData && playerStateRef.current) {
-            setPlayerUI({ name: myData.name, hp: myData.hp });
+        if (myData && playerStateRef.current && myData.hp !== playerStateRef.current.hp) {
+            playerStateRef.current.hp = myData.hp;
         }
+        setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP });
         
         if (opponentData) {
             if (!opponentStateRef.current) { // Opponent just joined
@@ -252,6 +253,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
         } else {
             opponentStateRef.current = null;
+            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP });
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -387,6 +389,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           y: player.y,
           dir: player.dir,
           bullets: bulletsRef.current,
+          hp: player.hp,
           lastUpdate: serverTimestamp()
         });
       }
