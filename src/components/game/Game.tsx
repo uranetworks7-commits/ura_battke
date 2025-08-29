@@ -72,6 +72,21 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
               {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </Button>
             <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
+             {gameStatus === GameStatus.PLAYING && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger>
+                            <div className="flex items-center gap-1">
+                                <Wifi size={16} className={getPingColor(ping)} />
+                                <span className={cn("font-mono text-xs", getPingColor(ping))}>{ping}ms</span>
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Your connection quality</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
           </div>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
@@ -99,21 +114,6 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
         <div className="flex-shrink-0 text-center flex flex-col items-center gap-2 pt-2">
           <p className="font-headline text-2xl text-accent">VS</p>
-          {gameStatus === GameStatus.PLAYING && (
-             <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger>
-                        <div className="flex items-center gap-1">
-                            <Wifi size={16} className={getPingColor(ping)} />
-                            <span className={cn("font-mono text-sm", getPingColor(ping))}>{ping}ms</span>
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Your connection quality</p>
-                    </TooltipContent>
-                </Tooltip>
-             </TooltipProvider>
-          )}
         </div>
 
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
