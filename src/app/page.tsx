@@ -30,7 +30,7 @@ export default function Home() {
         {!gameConfig && !spectatorConfig ? (
           <JoinGameForm onStartGame={handleStartGame} onStartSpectating={handleStartSpectating} />
         ) : gameConfig ? (
-          <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={game.config.username} onExit={handleExit} />
+          <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={gameConfig.username} onExit={handleExit} />
         ) : (
           <Spectator roomCode={spectatorConfig!.room} onExit={handleExit} />
         )}
