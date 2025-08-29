@@ -365,7 +365,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       if (roleRef.current) {
         const { id, vy, hp, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
-          ...playerData,
           x: player.x,
           y: player.y,
           dir: player.dir,
@@ -394,7 +393,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveLeft: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) { 
-          const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
+          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x -= speed;
           p.dir = 'left';
         }
@@ -402,7 +401,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveRight: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) {
-          const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
+          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x += speed;
           p.dir = 'right';
         }
@@ -410,7 +409,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     jump: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
-          const power = p.isHacker && p.hackerType === '225' ? JUMP_POWER * 2 : JUMP_POWER;
+          const power = p.isHacker ? JUMP_POWER * 2 : JUMP_POWER;
           p.vy = power;
         }
     },
@@ -420,7 +419,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if(p && gameStatus === GameStatus.PLAYING && now - lastFireTimeRef.current > FIRE_COOLDOWN) {
             playSound('fire');
             lastFireTimeRef.current = now;
-            const fireCount = p.isHacker && p.hackerType === '225' ? 20 : 1;
+            const fireCount = p.isHacker ? 20 : 1;
             for(let i = 0; i < fireCount; i++) {
               bulletsRef.current.push({
                   id: `${now}-${Math.random()}-${i}`,
@@ -454,5 +453,3 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted };
 }
-
-    
