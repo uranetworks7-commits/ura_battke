@@ -126,6 +126,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
+    // This state check helps prevent multiple declarations from the same client
     if (winner) return;
 
     const player = playerStateRef.current;
@@ -148,8 +149,14 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       player1: player1Details,
       player2: player2Details,
     };
+    
+    // By using onValue with a check, we ensure we only write if no winner exists.
+    onValue(ref(db, `${sRoomCode}/winner`), (snapshot) => {
+        if (!snapshot.exists()) {
+             update(ref(db, sRoomCode), { winner: finalWinnerInfo });
+        }
+    }, { onlyOnce: true });
 
-    update(ref(db, sRoomCode), { winner: finalWinnerInfo });
   }, [sRoomCode, winner]);
 
   const draw = useCallback(() => {
@@ -212,6 +219,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const roomData = snapshot.val();
         if (!roomData && gameStatus !== GameStatus.WAITING) return;
 
+        if (roomData?.winner) {
+            if (winner) return;
+            const winnerInfo = roomData.winner;
+            setWinner(winnerInfo.winner.name);
+            setGameStatus(GameStatus.ENDED);
+            off(roomPathRef.current);
+            return;
+        }
+
         if (!roleRef.current) {
             let isHacker = false;
             let hackerType: '' | '225' | '226' = '';
@@ -270,13 +286,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             setGameStatus(GameStatus.PLAYING);
         }
 
-        if (roomData?.winner) {
-            if (winner) return;
-            const winnerInfo = roomData.winner;
-            setWinner(winnerInfo.winner.name);
-            setGameStatus(GameStatus.ENDED);
-            off(roomPathRef.current);
-        }
     };
     
     onValue(roomPathRef.current, handleRoomValue);
@@ -387,13 +396,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, hp, ...playerData } = player;
+        const { id, vy, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
-          x: player.x,
-          y: player.y,
-          dir: player.dir,
-          bullets: bulletsRef.current,
-          gun: player.gun,
+          ...playerData,
           lastUpdate: serverTimestamp()
         });
       }
