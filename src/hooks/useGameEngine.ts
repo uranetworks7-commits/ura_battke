@@ -113,6 +113,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice });
   const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
   const [isMuted, setIsMuted] = useState(false);
+  const [ping, setPing] = useState(0);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
@@ -317,6 +318,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             }
             opponentBulletsRef.current = opponentData.bullets || [];
 
+            if(opponentData.lastUpdate){
+                const latency = Date.now() - opponentData.lastUpdate;
+                setPing(Math.min(999, Math.max(1, latency)));
+            }
+
             if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun) {
                 playSound(opponentData.gun === 'ak' ? 'ak_fire' : 'awm_fire');
             }
@@ -327,6 +333,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = null;
             setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
             lastOpponentBulletCount.current = 0;
+            setPing(0);
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -538,7 +545,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, ping };
 }
 
     
