@@ -95,7 +95,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const audioRefs = useRef<{
     bgMusic?: HTMLAudioElement;
     fire?: HTMLAudioElement;
-    move?: HTMLAudioElement;
   }>({});
 
   useEffect(() => {
@@ -106,9 +105,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
     audioRefs.current.fire = new Audio('https://universal-soundbank.com/sounds/1426.mp3');
     audioRefs.current.fire.volume = 0.5;
-
-    audioRefs.current.move = new Audio('https://universal-soundbank.com/sounds/16766.mp3');
-    audioRefs.current.move.volume = 0.6;
     
     return () => {
       audioRefs.current.bgMusic?.pause();
@@ -116,10 +112,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, []);
 
   useEffect(() => {
-    const { bgMusic, fire, move } = audioRefs.current;
+    const { bgMusic, fire } = audioRefs.current;
     if (bgMusic) bgMusic.muted = isMuted;
     if (fire) fire.muted = isMuted;
-    if (move) move.muted = isMuted;
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
@@ -402,7 +397,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     return () => cancelAnimationFrame(animationFrameId);
   }, [gameStatus, draw, sRoomCode, declareWinner]);
   
-  const playSound = (sound: 'move' | 'fire') => {
+  const playSound = (sound: 'fire') => {
     const audio = audioRefs.current[sound];
     if(audio && !isMuted) {
       audio.currentTime = 0;
@@ -414,7 +409,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveLeft: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) { 
-          playSound('move');
           const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x -= speed;
           p.dir = 'left';
@@ -423,7 +417,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveRight: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) {
-          playSound('move');
           const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x += speed;
           p.dir = 'right';
@@ -432,7 +425,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     jump: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
-          playSound('move');
           const power = p.isHacker && p.hackerType === '225' ? JUMP_POWER * 2 : JUMP_POWER;
           p.vy = power;
         }
