@@ -23,7 +23,7 @@ const GUNS = {
   },
   awm: {
     damage: 84,
-    cooldown: 1600,
+    cooldown: 2000,
     bulletColor: '#00FF00', // Stylish green
   },
 };

@@ -85,7 +85,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 )}
                 onClick={() => handleGunSelect('awm')}
               >
-                <Image src="https://i.postimg.cc/zvsCLRjN/1756463659972.png" alt="AWM" width={64} height={32} className="w-16 h-8 object-contain" />
+                <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={64} height={32} className="w-16 h-8 object-contain" />
               </div>
             </div>
             <p className="font-headline text-2xl text-accent">VS</p>
