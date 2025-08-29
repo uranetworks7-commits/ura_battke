@@ -31,10 +31,16 @@ export enum GameStatus {
   ENDED,
 }
 
-interface WinnerInfo {
+interface PlayerDetails {
   name: string;
   username: string;
+}
+
+interface WinnerInfo {
+  winner: PlayerDetails;
   reason: 'afk' | 'elimination' | 'timeout';
+  player1: PlayerDetails | null;
+  player2: PlayerDetails | null;
 }
 interface PlayerState {
   id: string;
@@ -85,9 +91,31 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
 
-  const declareWinner = useCallback((winnerInfo: WinnerInfo) => {
+  const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
     if (winner) return;
-    update(ref(db, sRoomCode), { winner: winnerInfo });
+
+    const player = playerStateRef.current;
+    const opponent = opponentStateRef.current;
+    
+    let player1Details: PlayerDetails | null = null;
+    let player2Details: PlayerDetails | null = null;
+
+    if (roleRef.current === 'player1') {
+        player1Details = player ? { name: player.name, username: player.username } : null;
+        player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+    } else {
+        player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+        player2Details = player ? { name: player.name, username: player.username } : null;
+    }
+
+    const finalWinnerInfo: WinnerInfo = {
+      winner: winnerDetails,
+      reason,
+      player1: player1Details,
+      player2: player2Details,
+    };
+
+    update(ref(db, sRoomCode), { winner: finalWinnerInfo });
   }, [sRoomCode, winner]);
 
   const draw = useCallback(() => {
@@ -205,7 +233,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (roomData?.winner) {
             if (winner) return;
             const winnerInfo = roomData.winner;
-            setWinner(winnerInfo.name);
+            setWinner(winnerInfo.winner.name);
             setGameStatus(GameStatus.ENDED);
             off(roomPathRef.current);
         }
@@ -232,7 +260,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
       waitingTimeoutRef.current = setTimeout(() => {
         if (gameStatus === GameStatus.WAITING && playerStateRef.current && !opponentStateRef.current) {
-           declareWinner({ name: playerStateRef.current.name, username: playerStateRef.current.username, reason: 'timeout' });
+           declareWinner({ name: playerStateRef.current.name, username: playerStateRef.current.username }, 'timeout' );
         }
       }, WAITING_TIMEOUT);
     } else {
@@ -259,7 +287,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             if (player && !winner) {
                 const opponentLastUpdate = opponent?.lastUpdate ? new Date(opponent.lastUpdate).getTime() : 0;
                 if (!opponent || (opponentLastUpdate && now - opponentLastUpdate > AFK_TIMEOUT)) {
-                    declareWinner({ name: player.name, username: player.username, reason: 'afk' });
+                    declareWinner({ name: player.name, username: player.username }, 'afk' );
                 } else {
                     resetAfkTimeout();
                 }
@@ -309,7 +337,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               if (newHp <= 0 && player) {
-                  declareWinner({ name: player.name, username: player.username, reason: 'elimination'});
+                  declareWinner({ name: player.name, username: player.username }, 'elimination');
               }
             }
         });
@@ -396,3 +424,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected };
 }
+
+    
