@@ -73,8 +73,8 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <div className="flex items-center gap-2 mt-2">
             <div
               className={cn(
-                'p-1 rounded-md cursor-pointer border-2',
-                selectedGun === 'ak' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+                'p-1 rounded-md cursor-pointer border-2 bg-white',
+                selectedGun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
               onClick={() => handleGunSelect('ak')}
             >
@@ -82,8 +82,8 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </div>
             <div
               className={cn(
-                'p-1 rounded-md cursor-pointer border-2',
-                selectedGun === 'awm' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+                'p-1 rounded-md cursor-pointer border-2 bg-white',
+                selectedGun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
               onClick={() => handleGunSelect('awm')}
             >
