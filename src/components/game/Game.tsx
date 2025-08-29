@@ -62,36 +62,38 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
       {/* Top Bar: Players Info & Gun Selection */}
       <div className="w-full flex justify-between items-start text-sm sm:text-base px-2 pt-2 gap-2">
         <div className="flex flex-col items-start gap-1 w-2/5">
-          <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={actions.toggleMute} className="text-white hover:bg-white/10 h-7 w-7">
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </Button>
+            <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
+          </div>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div
+              className={cn(
+                'p-1 rounded-md cursor-pointer border-2',
+                selectedGun === 'ak' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+              )}
+              onClick={() => handleGunSelect('ak')}
+            >
+              <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+            </div>
+            <div
+              className={cn(
+                'p-1 rounded-md cursor-pointer border-2',
+                selectedGun === 'awm' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
+              )}
+              onClick={() => handleGunSelect('awm')}
+            >
+              <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
+            </div>
+          </div>
         </div>
 
-        <div className="flex-shrink-0 text-center flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'p-1 rounded-md cursor-pointer border-2',
-                  selectedGun === 'ak' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
-                )}
-                onClick={() => handleGunSelect('ak')}
-              >
-                <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={64} height={32} className="w-16 h-8 object-contain" />
-              </div>
-              <div
-                className={cn(
-                  'p-1 rounded-md cursor-pointer border-2',
-                  selectedGun === 'awm' ? 'border-primary bg-primary/20' : 'border-transparent opacity-60'
-                )}
-                onClick={() => handleGunSelect('awm')}
-              >
-                <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={64} height={32} className="w-16 h-8 object-contain" />
-              </div>
-            </div>
-            <p className="font-headline text-2xl text-accent">VS</p>
-            <Button variant="ghost" size="icon" onClick={actions.toggleMute} className="text-white hover:bg-white/10 h-8 w-8">
-                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </Button>
+        <div className="flex-shrink-0 text-center flex flex-col items-center gap-2 pt-2">
+          <p className="font-headline text-2xl text-accent">VS</p>
         </div>
 
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
