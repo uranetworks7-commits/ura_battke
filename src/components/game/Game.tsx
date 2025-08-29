@@ -89,16 +89,17 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
       </div>
 
       {/* Bottom Controls */}
-      <div className="w-full max-w-md mx-auto flex justify-between items-center p-2">
-        <div className="flex space-x-2">
-          <Button onPointerDown={actions.moveLeft} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowLeft size={32} /></Button>
-          <Button onPointerDown={actions.moveRight} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowRight size={32} /></Button>
+       <div className="w-full max-w-lg mx-auto flex justify-between items-center p-2">
+        <div className="flex gap-2">
+          <Button onPointerDown={actions.moveLeft} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowLeft size={32} /></Button>
+          <Button onPointerDown={actions.moveRight} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowRight size={32} /></Button>
         </div>
-        <div className="flex space-x-2">
-          <Button onPointerDown={actions.jump} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowUp size={32} /></Button>
-          <Button onPointerDown={actions.fire} className="bg-primary hover:bg-primary/80 text-background select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"><Zap size={40} /></Button>
+        <div className="flex gap-2">
+          <Button onPointerDown={actions.jump} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowUp size={32} /></Button>
+          <Button onPointerDown={actions.fire} className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"><Zap size={40} /></Button>
         </div>
       </div>
+
 
       <AlertDialog open={gameStatus === GameStatus.ENDED && !!winner}>
         <AlertDialogContent className="bg-background border-primary">

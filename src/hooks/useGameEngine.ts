@@ -97,7 +97,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }>({});
 
   useEffect(() => {
-    audioRefs.current.fire = new Audio('https://universal-soundbank.com/sounds/1426.mp3');
+    // Correct way to handle audio URLs
+    audioRefs.current.fire = new Audio('/sounds/explosion.mp3');
     audioRefs.current.fire.volume = 0.5;
   }, []);
 
@@ -360,14 +361,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, ...playerData } = player;
+        const { id, vy, hp, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           ...playerData,
           x: player.x,
           y: player.y,
           dir: player.dir,
           bullets: bulletsRef.current,
-          hp: player.hp,
           lastUpdate: serverTimestamp()
         });
       }
