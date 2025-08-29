@@ -441,6 +441,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bullet.y < opponent.y + PLAYER_HEIGHT && bullet.y + 4 > opponent.y
             ) {
               bulletsToRemove.add(bullet.id);
+              if (opponent.hp === null || typeof opponent.hp === 'undefined' || isNaN(opponent.hp)) {
+                return;
+              }
               const damage = player.isHacker ? 100 : GUNS[bullet.gun].damage;
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
