@@ -87,9 +87,40 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [cheaterDetected, setCheaterDetected] = useState(false);
   const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP });
   const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP });
+  const [isMuted, setIsMuted] = useState(false);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
+
+  const audioRefs = useRef<{
+    bgMusic?: HTMLAudioElement;
+    fire?: HTMLAudioElement;
+    move?: HTMLAudioElement;
+  }>({});
+
+  useEffect(() => {
+    // Preload audio
+    audioRefs.current.bgMusic = new Audio('https://cdn.pixabay.com/audio/2022/10/26/audio_39a4f4d543.mp3');
+    audioRefs.current.bgMusic.loop = true;
+    audioRefs.current.bgMusic.volume = 0.3;
+
+    audioRefs.current.fire = new Audio('https://cdn.pixabay.com/audio/2021/08/04/audio_a133139343.mp3');
+    audioRefs.current.fire.volume = 0.5;
+
+    audioRefs.current.move = new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_731c518b33.mp3');
+    audioRefs.current.move.volume = 0.6;
+    
+    return () => {
+      audioRefs.current.bgMusic?.pause();
+    }
+  }, []);
+
+  useEffect(() => {
+    const { bgMusic, fire, move } = audioRefs.current;
+    if (bgMusic) bgMusic.muted = isMuted;
+    if (fire) fire.muted = isMuted;
+    if (move) move.muted = isMuted;
+  }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
     if (winner) return;
@@ -208,9 +239,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            // This was the source of the bug. The local state is the authority.
-            // We only need to read the opponent's actions against us.
-            // playerStateRef.current.hp = myData.hp; 
             setPlayerUI({ name: myData.name, hp: myData.hp });
         }
         
@@ -266,6 +294,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     } else {
       if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
     }
+
+    if (gameStatus === GameStatus.PLAYING) {
+        audioRefs.current.bgMusic?.play().catch(e => console.error("Autoplay prevented:", e));
+    } else {
+        audioRefs.current.bgMusic?.pause();
+    }
+    
     return () => {
       if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
     }
@@ -345,7 +380,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, hp, ...playerData } = player; // Don't send local HP up, it's set by opponent's client
+        const { id, vy, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           ...playerData,
           x: player.x,
@@ -363,11 +398,20 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
   }, [gameStatus, draw, sRoomCode, declareWinner]);
+  
+  const playSound = (sound: 'move' | 'fire') => {
+    const audio = audioRefs.current[sound];
+    if(audio && !isMuted) {
+      audio.currentTime = 0;
+      audio.play().catch(e => console.log('Sound play interrupted'));
+    }
+  }
 
   const actions = {
     moveLeft: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) { 
+          playSound('move');
           const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x -= speed;
           p.dir = 'left';
@@ -376,6 +420,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     moveRight: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING) {
+          playSound('move');
           const speed = p.isHacker && p.hackerType === '225' ? MOVE_SPEED * 2 : MOVE_SPEED;
           p.x += speed;
           p.dir = 'right';
@@ -384,6 +429,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     jump: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
+          playSound('move');
           const power = p.isHacker && p.hackerType === '225' ? JUMP_POWER * 2 : JUMP_POWER;
           p.vy = power;
         }
@@ -392,6 +438,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const p = playerStateRef.current;
         const now = Date.now();
         if(p && gameStatus === GameStatus.PLAYING && now - lastFireTimeRef.current > FIRE_COOLDOWN) {
+            playSound('fire');
             lastFireTimeRef.current = now;
             const fireCount = p.isHacker && p.hackerType === '225' ? 20 : 1;
             for(let i = 0; i < fireCount; i++) {
@@ -420,9 +467,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             });
         }
     },
+    toggleMute: () => {
+        setIsMuted(prev => !prev);
+    }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted };
 }
-
-    

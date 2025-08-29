@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react';
 import { useGameEngine, GameStatus } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -16,7 +16,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -50,7 +50,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
   }, [actions]);
 
   return (
-    <div className="h-full w-full flex flex-col items-center justify-between gap-4">
+    <div className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 gap-4 w-full h-full max-w-7xl mx-auto">
       {/* Top Bar: Players Info */}
       <div className="w-full flex justify-between items-center text-sm sm:text-base px-2 pt-2">
         <div className="flex flex-col items-start gap-1 w-2/5">
@@ -58,7 +58,12 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
         </div>
-        <div className="font-headline text-2xl text-accent">VS</div>
+        <div className="flex-shrink-0 text-center">
+            <p className="font-headline text-2xl text-accent">VS</p>
+             <Button variant="ghost" size="icon" onClick={actions.toggleMute} className="text-white hover:bg-white/10 h-8 w-8 mt-1">
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+             </Button>
+        </div>
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
            <div className="flex items-center justify-end gap-2 w-full">
              {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
@@ -84,7 +89,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
       </div>
 
       {/* Bottom Controls */}
-      <div className="w-full flex justify-between items-center p-2">
+      <div className="w-full max-w-md mx-auto flex justify-between items-center p-2">
         <div className="flex space-x-2">
           <Button onPointerDown={actions.moveLeft} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowLeft size={32} /></Button>
           <Button onPointerDown={actions.moveRight} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowRight size={32} /></Button>
