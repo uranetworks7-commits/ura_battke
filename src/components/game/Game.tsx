@@ -19,10 +19,8 @@ type GameProps = {
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
-  const [selectedGun, setSelectedGun] = useState<GunChoice>('ak');
 
   const handleGunSelect = (gun: GunChoice) => {
-    setSelectedGun(gun);
     actions.selectGun(gun);
   }
 
@@ -74,7 +72,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             <div
               className={cn(
                 'p-1 rounded-md cursor-pointer border-2 bg-white',
-                selectedGun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                player.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
               onClick={() => handleGunSelect('ak')}
             >
@@ -83,7 +81,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             <div
               className={cn(
                 'p-1 rounded-md cursor-pointer border-2 bg-white',
-                selectedGun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                player.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
               onClick={() => handleGunSelect('awm')}
             >
@@ -107,6 +105,26 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           </div>
           <Progress value={(opponent.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {opponent.hp}</p>
+          {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
+          <div className="flex items-center justify-end gap-2 mt-2">
+            <div
+              className={cn(
+                'p-1 rounded-md border-2 bg-white',
+                opponent.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+              )}
+            >
+              <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+            </div>
+            <div
+              className={cn(
+                'p-1 rounded-md border-2 bg-white',
+                opponent.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+              )}
+            >
+              <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
+            </div>
+          </div>
+          )}
         </div>
       </div>
       

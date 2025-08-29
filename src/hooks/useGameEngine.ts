@@ -80,6 +80,14 @@ interface Bullet {
   gun: GunChoice;
 }
 
+interface DamageIndicator {
+    id: string;
+    x: number;
+    y: number;
+    amount: number;
+    life: number; // Time to live in frames
+}
+
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
 export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roomCode: string, playerName: string, playerUsername: string) {
@@ -93,6 +101,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   
   const bulletsRef = useRef<Bullet[]>([]);
   const opponentBulletsRef = useRef<Bullet[]>([]);
+  const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
   const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const afkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -100,8 +109,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
   const [cheaterDetected, setCheaterDetected] = useState(false);
-  const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP });
-  const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP });
+  const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice });
+  const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
   const [isMuted, setIsMuted] = useState(false);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
@@ -126,7 +135,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
-    // This state check helps prevent multiple declarations from the same client
     if (winner) return;
 
     const player = playerStateRef.current;
@@ -150,7 +158,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       player2: player2Details,
     };
     
-    // By using onValue with a check, we ensure we only write if no winner exists.
     onValue(ref(db, `${sRoomCode}/winner`), (snapshot) => {
         if (!snapshot.exists()) {
              update(ref(db, sRoomCode), { winner: finalWinnerInfo });
@@ -200,11 +207,24 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         });
     }
 
+    const drawDamageIndicators = () => {
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillStyle = 'yellow';
+        ctx.textAlign = 'center';
+        damageIndicatorsRef.current.forEach(ind => {
+            const alpha = ind.life / 60; // Fade out over 1 second (60 frames)
+            ctx.globalAlpha = alpha;
+            ctx.fillText(`-${ind.amount}`, ind.x, ind.y);
+        });
+        ctx.globalAlpha = 1.0; // Reset alpha
+    };
+
     drawEntity(player, true);
     if(gameStatus === GameStatus.PLAYING) drawEntity(opponent, false);
 
     drawBullets(bulletsRef.current);
     drawBullets(opponentBulletsRef.current);
+    drawDamageIndicators();
 
   }, [canvasRef, gameStatus]);
   
@@ -264,10 +284,20 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const myData = roomData?.[roleRef.current!];
         const opponentData = roomData?.[opponentRole];
 
-        if (myData && playerStateRef.current && myData.hp !== playerStateRef.current.hp) {
+        if (myData && playerStateRef.current) {
+            if(myData.hp < playerStateRef.current.hp){
+                const damage = playerStateRef.current.hp - myData.hp;
+                damageIndicatorsRef.current.push({
+                    id: `dmg-${Date.now()}`,
+                    amount: damage,
+                    x: playerStateRef.current.x + PLAYER_WIDTH / 2,
+                    y: playerStateRef.current.y - 10,
+                    life: 60 // 60 frames = 1 second
+                });
+            }
             playerStateRef.current.hp = myData.hp;
         }
-        setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP });
+        setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
         
         if (opponentData) {
             if (!opponentStateRef.current) { // Opponent just joined
@@ -276,10 +306,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
             }
             opponentBulletsRef.current = opponentData.bullets || [];
-            setOpponentUI({ name: opponentData.name, hp: opponentData.hp });
+            setOpponentUI({ name: opponentData.name, hp: opponentData.hp, gun: opponentData.gun });
         } else {
             opponentStateRef.current = null;
-            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP });
+            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -355,7 +385,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   useEffect(() => {
     let animationFrameId: number;
     const gameLoop = () => {
-      if (gameStatus !== GameStatus.PLAYING || !playerStateRef.current) {
+      if (!playerStateRef.current) {
         draw();
         animationFrameId = requestAnimationFrame(gameLoop);
         return;
@@ -363,19 +393,23 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       
       const player = playerStateRef.current;
       
-      player.vy += GRAVITY;
-      player.y += player.vy;
-      if (player.y >= GROUND_Y) {
-          player.y = GROUND_Y;
-          player.vy = 0;
+      if (gameStatus === GameStatus.PLAYING) {
+        player.vy += GRAVITY;
+        player.y += player.vy;
+        if (player.y >= GROUND_Y) {
+            player.y = GROUND_Y;
+            player.vy = 0;
+        }
+        player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
       }
-      player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
-      
+
       const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
+      
+      damageIndicatorsRef.current = damageIndicatorsRef.current.map(ind => ({ ...ind, y: ind.y - 0.5, life: ind.life - 1 })).filter(ind => ind.life > 0);
 
       const opponent = opponentStateRef.current;
-      if (opponent) {
+      if (opponent && gameStatus === GameStatus.PLAYING) {
         const bulletsToRemove = new Set<string>();
         bulletsRef.current.forEach(bullet => {
             if (
@@ -387,6 +421,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
+              
+              damageIndicatorsRef.current.push({
+                id: `dmg-${Date.now()}`,
+                amount: damage,
+                x: opponent.x + PLAYER_WIDTH / 2,
+                y: opponent.y - 10,
+                life: 60 // 60 frames = 1 second
+              });
+
               if (newHp <= 0 && player) {
                   declareWinner({ name: player.name, username: player.username }, 'elimination');
               }
@@ -396,9 +439,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, ...playerData } = player;
+        const { id, vy, hp, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           ...playerData,
+          bullets: bulletsRef.current,
           lastUpdate: serverTimestamp()
         });
       }
