@@ -98,8 +98,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   useEffect(() => {
     // Correct way to handle audio URLs
-    audioRefs.current.fire = new Audio('/sounds/explosion.mp3');
-    audioRefs.current.fire.volume = 0.5;
+    audioRefs.current.fire = new Audio('https://i.postimg.cc/mD41Sg6c/explosion.mp3');
+    if (audioRefs.current.fire) {
+        audioRefs.current.fire.volume = 0.5;
+    }
   }, []);
 
   useEffect(() => {
@@ -452,3 +454,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted };
 }
+
+    
