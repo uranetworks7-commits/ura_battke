@@ -25,12 +25,12 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-2 sm:p-4 font-body" style={{ backgroundImage: `url('https://i.postimg.cc/y8ZBRDXQ/mmm.png')`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-      <div className="z-10 w-full max-w-7xl h-full sm:h-auto text-center text-white bg-black/60 backdrop-blur-sm rounded-lg p-4 sm:p-8 border border-primary/50">
+    <main className="flex min-h-screen flex-col items-stretch justify-stretch bg-background font-body" style={{ backgroundImage: `url('https://i.postimg.cc/y8ZBRDXQ/mmm.png')`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+      <div className="z-10 flex-1 flex flex-col items-center justify-center text-center text-white bg-black/60 backdrop-blur-sm p-4 sm:p-8">
         {!gameConfig && !spectatorConfig ? (
           <JoinGameForm onStartGame={handleStartGame} onStartSpectating={handleStartSpectating} />
         ) : gameConfig ? (
-          <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={gameConfig.username} onExit={handleExit} />
+          <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={game.config.username} onExit={handleExit} />
         ) : (
           <Spectator roomCode={spectatorConfig!.room} onExit={handleExit} />
         )}
