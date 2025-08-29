@@ -26,9 +26,11 @@ export default function Home() {
 
   return (
     <main className="h-screen w-screen flex flex-col bg-background font-body bg-cover bg-center" style={{ backgroundImage: `url('https://i.postimg.cc/y8ZBRDXQ/mmm.png')` }}>
-      <div className="flex-1 flex flex-col items-center justify-center text-center text-white bg-black/60 backdrop-blur-sm p-4 sm:p-8">
+      <div className="flex-1 flex flex-col items-stretch justify-center text-center text-white bg-black/60 backdrop-blur-sm p-2 sm:p-4">
         {!gameConfig && !spectatorConfig ? (
-          <JoinGameForm onStartGame={handleStartGame} onStartSpectating={handleStartSpectating} />
+          <div className="flex items-center justify-center h-full">
+            <JoinGameForm onStartGame={handleStartGame} onStartSpectating={handleStartSpectating} />
+          </div>
         ) : gameConfig ? (
           <Game roomCode={gameConfig.room} playerName={gameConfig.name} playerUsername={gameConfig.username} onExit={handleExit} />
         ) : (

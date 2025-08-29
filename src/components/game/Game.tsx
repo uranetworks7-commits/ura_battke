@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react';
 import { useGameEngine, GameStatus } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -50,42 +50,49 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
   }, [actions]);
 
   return (
-    <div className="w-full flex flex-col items-center gap-4">
-      <div className="w-full flex justify-between items-center text-sm sm:text-base px-2">
-        <div className="flex flex-col items-start gap-1">
-          <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{player?.name || 'Player'}</p>
-          <Progress value={(player.hp / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
+    <div className="h-full w-full flex flex-col items-center justify-between gap-4">
+      {/* Top Bar: Players Info */}
+      <div className="w-full flex justify-between items-center text-sm sm:text-base px-2 pt-2">
+        <div className="flex flex-col items-start gap-1 w-2/5">
+          <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
+          <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
         </div>
-        <div className="font-headline text-xl text-accent">VS</div>
-        <div className="flex flex-col items-end gap-1 text-right">
-           <div className="flex items-center gap-2">
+        <div className="font-headline text-2xl text-accent">VS</div>
+        <div className="flex flex-col items-end gap-1 text-right w-2/5">
+           <div className="flex items-center justify-end gap-2 w-full">
              {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
                 <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-500/20 hover:text-red-400 h-7 w-7" onClick={actions.reportOpponent}>
                     <ShieldAlert size={16} />
                 </Button>
              )}
-            <p className="font-headline text-primary truncate max-w-32 sm:max-w-48">{gameStatus === GameStatus.WAITING ? 'Waiting...' : opponent?.name}</p>
+            <p className="font-headline text-primary truncate">{gameStatus === GameStatus.WAITING ? 'Waiting...' : opponent?.name}</p>
           </div>
-          <Progress value={(opponent.hp / 1800) * 100} className="w-32 sm:w-48 h-3 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={(opponent.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {opponent.hp}</p>
         </div>
       </div>
       
-      <div className="relative w-full aspect-video max-w-4xl border-2 border-primary shadow-2xl shadow-primary/30 rounded-lg overflow-hidden">
-        <canvas ref={canvasRef} className="w-full h-full" width={800} height={450} />
+      {/* Game Canvas */}
+      <div className="relative w-full flex-1 max-w-4xl mx-auto my-2">
+        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full border-2 border-primary shadow-2xl shadow-primary/30 rounded-lg" width={800} height={450} />
         {gameStatus === GameStatus.WAITING && (
-          <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
             <p className="text-2xl font-headline text-white animate-pulse">Waiting for opponent...</p>
           </div>
         )}
       </div>
 
-      <div className="flex space-x-2">
-        <Button onPointerDown={actions.moveLeft} className="bg-accent hover:bg-accent/80 text-background select-none"><ArrowLeft /></Button>
-        <Button onPointerDown={actions.jump} className="bg-accent hover:bg-accent/80 text-background select-none"><ArrowUp /></Button>
-        <Button onPointerDown={actions.moveRight} className="bg-accent hover:bg-accent/80 text-background select-none"><ArrowRight /></Button>
-        <Button onPointerDown={actions.fire} className="bg-primary hover:bg-primary/80 text-background select-none" size="lg"><Zap /> Fire</Button>
+      {/* Bottom Controls */}
+      <div className="w-full flex justify-between items-center p-2">
+        <div className="flex space-x-2">
+          <Button onPointerDown={actions.moveLeft} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowLeft size={32} /></Button>
+          <Button onPointerDown={actions.moveRight} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowRight size={32} /></Button>
+        </div>
+        <div className="flex space-x-2">
+          <Button onPointerDown={actions.jump} className="bg-accent hover:bg-accent/80 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowUp size={32} /></Button>
+          <Button onPointerDown={actions.fire} className="bg-primary hover:bg-primary/80 text-background select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"><Zap size={40} /></Button>
+        </div>
       </div>
 
       <AlertDialog open={gameStatus === GameStatus.ENDED && !!winner}>
@@ -101,9 +108,9 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={onExit} className="w-full bg-primary hover:bg-primary/80 text-background">
-              Exit Game
-            </AlertDialogAction>
+             <Button onClick={onExit} className="w-full font-headline bg-primary hover:bg-primary/80 text-background">
+                <XCircle className="mr-2" /> Exit Game
+             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
