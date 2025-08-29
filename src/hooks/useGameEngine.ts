@@ -98,7 +98,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   useEffect(() => {
     // Correct way to handle audio URLs
-    audioRefs.current.fire = new Audio('https://media1.vocaroo.com/mp3/1ifBfeypu9FP');
+    audioRefs.current.fire = new Audio('https://files.catbox.moe/uxsgkh.mp3');
     if (audioRefs.current.fire) {
         audioRefs.current.fire.volume = 0.5;
     }
