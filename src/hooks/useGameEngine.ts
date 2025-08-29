@@ -550,5 +550,3 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, ping };
 }
-
-    
