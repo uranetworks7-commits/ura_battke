@@ -22,7 +22,7 @@ const GUNS = {
     bulletColor: 'red',
   },
   awm: {
-    damage: 84,
+    damage: 124,
     cooldown: 2000,
     bulletColor: '#00FF00', // Stylish green
   },
@@ -101,6 +101,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   
   const bulletsRef = useRef<Bullet[]>([]);
   const opponentBulletsRef = useRef<Bullet[]>([]);
+  const lastOpponentBulletCount = useRef(0);
   const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
   const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -128,6 +129,14 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     if (audioRefs.current.awm_fire) audioRefs.current.awm_fire.volume = 0.5;
   }, []);
 
+  const playSound = (sound: 'ak_fire' | 'awm_fire') => {
+    const audio = audioRefs.current[sound];
+    if(audio && !isMuted) {
+      audio.currentTime = 0;
+      audio.play().catch(e => console.log('Sound play interrupted'));
+    }
+  };
+
   useEffect(() => {
     const { ak_fire, awm_fire } = audioRefs.current;
     if (ak_fire) ak_fire.muted = isMuted;
@@ -135,36 +144,37 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
-    if (winner) return;
-
-    const player = playerStateRef.current;
-    const opponent = opponentStateRef.current;
-    
-    let player1Details: PlayerDetails | null = null;
-    let player2Details: PlayerDetails | null = null;
-
-    if (roleRef.current === 'player1') {
-        player1Details = player ? { name: player.name, username: player.username } : null;
-        player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-    } else {
-        player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-        player2Details = player ? { name: player.name, username: player.username } : null;
-    }
-
-    const finalWinnerInfo: WinnerInfo = {
-      winner: winnerDetails,
-      reason,
-      player1: player1Details,
-      player2: player2Details,
-    };
-    
     onValue(ref(db, `${sRoomCode}/winner`), (snapshot) => {
-        if (!snapshot.exists()) {
-             update(ref(db, sRoomCode), { winner: finalWinnerInfo });
+        if (snapshot.exists()) {
+             return; // Winner already declared
         }
+
+        const player = playerStateRef.current;
+        const opponent = opponentStateRef.current;
+        
+        let player1Details: PlayerDetails | null = null;
+        let player2Details: PlayerDetails | null = null;
+
+        if (roleRef.current === 'player1') {
+            player1Details = player ? { name: player.name, username: player.username } : null;
+            player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+        } else {
+            player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+            player2Details = player ? { name: player.name, username: player.username } : null;
+        }
+
+        const finalWinnerInfo: WinnerInfo = {
+          winner: winnerDetails,
+          reason,
+          player1: player1Details,
+          player2: player2Details,
+        };
+        
+        update(ref(db, sRoomCode), { winner: finalWinnerInfo });
+
     }, { onlyOnce: true });
 
-  }, [sRoomCode, winner]);
+  }, [sRoomCode]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -306,10 +316,17 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
             }
             opponentBulletsRef.current = opponentData.bullets || [];
+
+            if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun) {
+                playSound(opponentData.gun === 'ak' ? 'ak_fire' : 'awm_fire');
+            }
+            lastOpponentBulletCount.current = opponentBulletsRef.current.length;
+
             setOpponentUI({ name: opponentData.name, hp: opponentData.hp, gun: opponentData.gun });
         } else {
             opponentStateRef.current = null;
             setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
+            lastOpponentBulletCount.current = 0;
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -422,14 +439,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
               
-              damageIndicatorsRef.current.push({
-                id: `dmg-${Date.now()}`,
-                amount: damage,
-                x: opponent.x + PLAYER_WIDTH / 2,
-                y: opponent.y - 10,
-                life: 60 // 60 frames = 1 second
-              });
-
               if (newHp <= 0 && player) {
                   declareWinner({ name: player.name, username: player.username }, 'elimination');
               }
@@ -441,7 +450,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       if (roleRef.current) {
         const { id, vy, hp, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
-          ...playerData,
+          x: playerData.x,
+          y: playerData.y,
+          dir: playerData.dir,
+          gun: playerData.gun,
           bullets: bulletsRef.current,
           lastUpdate: serverTimestamp()
         });
@@ -455,14 +467,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     return () => cancelAnimationFrame(animationFrameId);
   }, [gameStatus, draw, sRoomCode, declareWinner]);
   
-  const playSound = (sound: 'ak_fire' | 'awm_fire') => {
-    const audio = audioRefs.current[sound];
-    if(audio && !isMuted) {
-      audio.currentTime = 0;
-      audio.play().catch(e => console.log('Sound play interrupted'));
-    }
-  }
-
   const actions = {
     moveLeft: () => {
         const p = playerStateRef.current;
@@ -536,3 +540,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted };
 }
+
+    
