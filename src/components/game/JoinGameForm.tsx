@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { ref, get, runTransaction } from 'firebase/database';
-import { Loader2, Gamepad2, Eye, BookOpen } from 'lucide-react';
+import { ref, get } from 'firebase/database';
+import { Loader2, Gamepad2, Eye, BookOpen, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
@@ -34,6 +34,7 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
   const [username, setUsername] = useState('');
   const [spectatorRoom, setSpectatorRoom] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
   const { toast } = useToast();
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
@@ -62,7 +63,6 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
         const snapshot = await get(roomRef);
         const roomData = snapshot.val();
         
-        // Scenario 1: Room exists
         if (roomData) {
             const p1 = roomData.player1;
             const p2 = roomData.player2;
@@ -70,11 +70,9 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
             const isP1Match = p1 && p1.name === currentName && p1.username === currentUsername;
             const isP2Match = p2 && p2.name === currentName && p2.username === currentUsername;
 
-            // Scenario 1a: Player is rejoining
             if (isP1Match || isP2Match) {
                 onStartGame(currentRoom, currentName, currentUsername);
             } 
-            // Scenario 1b: Room is full and player is not rejoining
             else if (p1 && p2) {
                  toast({
                     title: 'Room is Full',
@@ -82,12 +80,10 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
                     variant: 'destructive',
                 });
             }
-            // Scenario 1c: Room has one player, new player joins
             else {
                  onStartGame(currentRoom, currentName, currentUsername);
             }
         } 
-        // Scenario 2: Room does not exist, create it and join
         else {
              onStartGame(currentRoom, currentName, currentUsername);
         }
@@ -133,6 +129,11 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
         }
     }
     setIsLoading(false);
+  };
+
+  const handleReload = () => {
+    setIsReloading(true);
+    window.location.reload();
   };
   
   const ModeButton = ({ activeMode, targetMode, children }: { activeMode: Mode, targetMode: Mode, children: React.ReactNode }) => (
@@ -185,9 +186,12 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
                       <Input id="username" placeholder="Enter your username to join" value={username} onChange={(e) => setUsername(e.target.value)} className="font-body" required disabled={isLoading} />
                     </div>
                   </CardContent>
-                  <CardFooter>
-                    <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading}>
+                  <CardFooter className="flex gap-2">
+                    <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading || isReloading}>
                       {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
+                    </Button>
+                    <Button type="button" variant="destructive" size="icon" onClick={handleReload} disabled={isLoading || isReloading}>
+                      {isReloading ? <Loader2 className="animate-spin" /> : <Trash2 />}
                     </Button>
                   </CardFooter>
                 </form>

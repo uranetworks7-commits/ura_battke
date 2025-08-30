@@ -57,8 +57,6 @@ interface PlayerDetails {
 interface WinnerInfo {
     winner: PlayerDetails;
     reason: 'afk' | 'elimination' | 'timeout';
-    player1: PlayerDetails | null;
-    player2: PlayerDetails | null;
 }
 interface PlayerState {
   id: string;
@@ -129,8 +127,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const bulletsRef = useRef<Bullet[]>([]);
   const grenadesRef = useRef<Grenade[]>([]);
   const explosionsRef = useRef<Explosion[]>([]);
-  const opponentBulletsRef = useRef<Bullet[]>([]);
-  const opponentGrenadesRef = useRef<Grenade[]>([]);
   const lastOpponentBulletCount = useRef(0);
   const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
@@ -144,7 +140,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [winner, setWinner] = useState<string | null>(null);
   const [cheaterDetected, setCheaterDetected] = useState(false);
   const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice });
-  const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
+  const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice, bullets: [], grenades: [] });
   const [isMuted, setIsMuted] = useState(false);
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   
@@ -181,32 +177,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
       const winnerRef = ref(db, `${sRoomCode}/winner`);
       runTransaction(winnerRef, (currentData) => {
-          if (currentData === null) { // No winner has been declared yet
-              const player = playerStateRef.current;
-              const opponent = opponentStateRef.current;
-              
-              let player1Details: PlayerDetails | null = null;
-              let player2Details: PlayerDetails | null = null;
-      
-              if (roleRef.current === 'player1') {
-                  player1Details = player ? { name: player.name, username: player.username } : null;
-                  player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-              } else {
-                  player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-                  player2Details = player ? { name: player.name, username: player.username } : null;
-              }
-      
-              const finalWinnerInfo: WinnerInfo = {
-                winner: winnerDetails,
-                reason,
-                player1: player1Details,
-                player2: player2Details,
-              };
+          if (currentData === null) {
+              const finalWinnerInfo: WinnerInfo = { winner: winnerDetails, reason };
               return finalWinnerInfo;
-          } else {
-              // A winner already exists, so abort the transaction
-              return; 
           }
+          return; // Abort transaction
       });
   }, [sRoomCode]);
 
@@ -226,7 +201,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     }
     
     const player = playerStateRef.current;
-    const opponent = opponentStateRef.current;
+    const opponent = opponentUI;
 
     const drawEntity = (entity: PlayerState | OpponentState | null, isPlayer: boolean) => {
       if (!entity) return;
@@ -311,17 +286,17 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     };
 
     drawEntity(player, true);
-    if(gameStatus === GameStatus.PLAYING) drawEntity(opponent, false);
+    if(gameStatus === GameStatus.PLAYING) drawEntity(opponentStateRef.current, false);
 
     drawBullets(bulletsRef.current);
-    drawBullets(opponentBulletsRef.current);
+    drawBullets(opponentUI.bullets);
     drawGrenades(grenadesRef.current);
-    drawGrenades(opponentGrenadesRef.current);
+    drawGrenades(opponentUI.grenades);
     drawExplosions();
     drawTrajectory();
     drawDamageIndicators();
 
-  }, [canvasRef, gameStatus, declareWinner]);
+  }, [canvasRef, gameStatus, declareWinner, opponentUI]);
   
   useEffect(() => {
     goOnline(db);
@@ -375,7 +350,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             } else if (!p2) {
                 roleRef.current = 'player2';
             } else {
-                 // This case should be handled by the JoinGameForm logic, but as a fallback:
                  console.error("Room is full or player data mismatch.");
                  return;
             }
@@ -398,7 +372,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
             const { id, vy, vx, ...playerData } = playerStateRef.current || {};
             set(myRef, playerData);
-            // onDisconnect().remove() is removed to allow for reconnection
         }
 
         const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
@@ -406,29 +379,29 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            // Don't override local position for smoothness, just HP
             playerStateRef.current.hp = myData.hp;
         }
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
         
         if (opponentData) {
-            if (!opponentStateRef.current) { // Opponent just joined or was already there
-                opponentStateRef.current = { id: opponentRole, ...opponentData };
-            } else { // Opponent state is updating
-                opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
-            }
-            opponentBulletsRef.current = opponentData.bullets || [];
-            opponentGrenadesRef.current = opponentData.grenades || [];
-
-            if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun && opponentData.gun !== 'grenade') {
+            opponentStateRef.current = { id: opponentRole, ...opponentData };
+            
+            const opponentBullets = opponentData.bullets || [];
+            if (opponentBullets.length > lastOpponentBulletCount.current && opponentData.gun && opponentData.gun !== 'grenade') {
                 playSound(opponentData.gun === 'ak' ? 'ak_fire' : 'awm_fire');
             }
-            lastOpponentBulletCount.current = opponentBulletsRef.current.length;
+            lastOpponentBulletCount.current = opponentBullets.length;
 
-            setOpponentUI({ name: opponentData.name, hp: opponentData.hp, gun: opponentData.gun });
+            setOpponentUI({ 
+                name: opponentData.name, 
+                hp: opponentData.hp, 
+                gun: opponentData.gun,
+                bullets: opponentBullets,
+                grenades: opponentData.grenades || []
+            });
         } else {
             opponentStateRef.current = null;
-            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
+            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak', bullets: [], grenades: [] });
             lastOpponentBulletCount.current = 0;
         }
         
@@ -444,11 +417,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
-        // Player data is intentionally not cleared on exit to support rejoining.
         goOffline(db);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sRoomCode, playerName, playerUsername, toast]);
+  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
@@ -482,7 +453,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             
             if (player && !winner) {
                 const opponentLastUpdate = opponent?.lastUpdate ? new Date(opponent.lastUpdate).getTime() : 0;
-                if (!opponent || (opponentLastUpdate && now - opponentLastUpdate > AFK_TIMEOUT)) {
+                if (opponentLastUpdate && now - opponentLastUpdate > AFK_TIMEOUT) {
                     declareWinner({ name: player.name, username: player.username }, 'afk' );
                 } else {
                     resetAfkTimeout();
@@ -590,7 +561,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           g.x += g.vx;
           g.y += g.vy;
 
-          // Bouncing
           if(g.y >= GROUND_Y + GRENADE_RADIUS) {
               g.y = GROUND_Y + GRENADE_RADIUS;
               g.vy *= -0.5; // Lose energy on bounce
