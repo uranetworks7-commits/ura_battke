@@ -30,7 +30,7 @@ const GUNS = {
   },
   grenade: {
     damage: 294, // Max damage
-    cooldown: 10000, // 10 seconds
+    cooldown: 5000, // 5 seconds
     blastRadius: 150,
   }
 };
@@ -72,11 +72,13 @@ interface PlayerState {
   hackerType: '' | '225' | '226';
   lastUpdate: any;
   gun: GunChoice;
+  lastGrenadeTime: number;
 }
 
-interface OpponentState extends Omit<PlayerState, 'vy' | 'vx'> {
+interface OpponentState extends Omit<PlayerState, 'vy' | 'vx' | 'lastGrenadeTime'> {
     bullets?: Bullet[];
     grenades?: Grenade[];
+    lastGrenadeTime?: number;
 }
 
 interface Bullet {
@@ -336,7 +338,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0 };
             
             const p1 = roomData?.player1;
             const p2 = roomData?.player2;
@@ -380,6 +382,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
         if (myData && playerStateRef.current) {
             playerStateRef.current.hp = myData.hp;
+            playerStateRef.current.lastGrenadeTime = myData.lastGrenadeTime || 0;
         }
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
         
@@ -546,12 +549,17 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
       }
       
-      const grenadeTimeLeft = (lastFireTimeRef.current + GUNS.grenade.cooldown) - Date.now();
-      if (player.gun === 'grenade' && grenadeTimeLeft > 0) {
-        setGrenadeCooldown(Math.ceil(grenadeTimeLeft / 1000));
+      if (player.lastGrenadeTime > 0) {
+        const grenadeTimeLeft = (player.lastGrenadeTime + GUNS.grenade.cooldown) - Date.now();
+        if (grenadeTimeLeft > 0) {
+          setGrenadeCooldown(Math.ceil(grenadeTimeLeft / 1000));
+        } else {
+          setGrenadeCooldown(0);
+        }
       } else {
         setGrenadeCooldown(0);
       }
+
 
       const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
@@ -623,6 +631,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           gun: playerData.gun,
           bullets: bulletsRef.current,
           grenades: grenadesRef.current,
+          lastGrenadeTime: playerData.lastGrenadeTime,
           lastUpdate: serverTimestamp()
         });
       }
@@ -651,7 +660,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const p = playerStateRef.current;
         if (p && gameStatus === GameStatus.PLAYING && p.gun === 'grenade') {
             const now = Date.now();
-            if (now - lastFireTimeRef.current > GUNS.grenade.cooldown) {
+            if (now - (p.lastGrenadeTime || 0) > GUNS.grenade.cooldown) {
                  isThrowingGrenadeRef.current = true;
                  throwPowerRef.current = 15; // min power
             }
@@ -663,40 +672,43 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if(!p || gameStatus !== GameStatus.PLAYING) return;
         
         const gunInfo = GUNS[p.gun];
-        if (now - lastFireTimeRef.current > gunInfo.cooldown) {
-            if (p.gun === 'grenade') {
-                if (!isThrowingGrenadeRef.current) return;
-            }
-            lastFireTimeRef.current = now;
+        if (p.gun === 'grenade') {
+            if (!isThrowingGrenadeRef.current) return;
+            if (now - (p.lastGrenadeTime || 0) < gunInfo.cooldown) return;
+        } else {
+            if (now - lastFireTimeRef.current < gunInfo.cooldown) return;
+        }
+        
+        lastFireTimeRef.current = now;
 
-            if (p.gun === 'grenade') {
-                isThrowingGrenadeRef.current = false;
+        if (p.gun === 'grenade') {
+            isThrowingGrenadeRef.current = false;
+            p.lastGrenadeTime = now;
 
-                const power = throwPowerRef.current;
-                const angle = -Math.PI / 4; // 45 degrees up
-                const dirMultiplier = p.dir === 'right' ? 1 : -1;
-                
-                grenadesRef.current.push({
-                    id: `${now}-${Math.random()}`,
-                    x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : 0),
-                    y: p.y + PLAYER_HEIGHT / 2,
-                    vx: Math.cos(angle) * power * dirMultiplier,
-                    vy: Math.sin(angle) * power,
-                    fuse: GRENADE_FUSE,
-                    ownerId: p.id
-                });
-            } else { // ak or awm
-                playSound(`${p.gun}_fire`);
-                const fireCount = p.isHacker ? 20 : 1;
-                for(let i = 0; i < fireCount; i++) {
-                  bulletsRef.current.push({
-                      id: `${now}-${Math.random()}-${i}`,
-                      x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
-                      y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
-                      dir: p.dir === 'right' ? 1 : -1,
-                      gun: p.gun,
-                  });
-                }
+            const power = throwPowerRef.current;
+            const angle = -Math.PI / 4; // 45 degrees up
+            const dirMultiplier = p.dir === 'right' ? 1 : -1;
+            
+            grenadesRef.current.push({
+                id: `${now}-${Math.random()}`,
+                x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : 0),
+                y: p.y + PLAYER_HEIGHT / 2,
+                vx: Math.cos(angle) * power * dirMultiplier,
+                vy: Math.sin(angle) * power,
+                fuse: GRENADE_FUSE,
+                ownerId: p.id
+            });
+        } else { // ak or awm
+            playSound(`${p.gun}_fire`);
+            const fireCount = p.isHacker ? 20 : 1;
+            for(let i = 0; i < fireCount; i++) {
+              bulletsRef.current.push({
+                  id: `${now}-${Math.random()}-${i}`,
+                  x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
+                  y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
+                  dir: p.dir === 'right' ? 1 : -1,
+                  gun: p.gun,
+              });
             }
         }
     },
@@ -728,3 +740,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
 }
+
+    
