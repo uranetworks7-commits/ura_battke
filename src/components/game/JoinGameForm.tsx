@@ -51,30 +51,11 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
     }
 
     if (room.trim() && name.trim()) {
-      const sRoomCode = sanitizeKey(room.trim());
-      const roomRef = ref(db, sRoomCode);
-      try {
-        const snapshot = await get(roomRef);
-        const roomData = snapshot.val();
-        if (roomData && roomData.player1 && roomData.player2) {
-            toast({
-                title: 'Room is Full',
-                description: 'This room already has two players.',
-                variant: 'destructive',
-            });
-        } else {
-            onStartGame(room.trim(), name.trim(), username.trim());
-        }
-      } catch (error) {
-        console.error("Firebase check failed:", error);
-        toast({
-            title: 'Connection Error',
-            description: 'Could not check room status. Please try again.',
-            variant: 'destructive',
-        });
-      }
+      onStartGame(room.trim(), name.trim(), username.trim());
+    } else {
+        // This part may not be strictly necessary if the 'required' attribute on inputs works
+        setIsLoading(false);
     }
-    setIsLoading(false);
   };
   
   const handleSpectateSubmit = async (e: React.FormEvent) => {
@@ -213,3 +194,5 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
     </div>
   );
 }
+
+    

@@ -370,6 +370,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 roleRef.current = 'player2';
                 playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vx: 0, vy: 0, dir: 'left' };
             } else {
+                toast({
+                    title: 'Room is Full',
+                    description: 'This room already has two players.',
+                    variant: 'destructive',
+                });
                 return;
             }
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
@@ -738,3 +743,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
 }
+
+    
