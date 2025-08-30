@@ -284,14 +284,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         for(let t = 0; t < 60; t += 4) { // Draw dots for the trajectory
             const newX = x + velX * t;
-            const newY = y + velY * t + 0.5 * GRAVITY * t * t;
+            const newY = y + velY * t + 0.5 * (GRAVITY/2) * t * t; // Use grenade gravity
             if (newY > GROUND_Y + GRENADE_RADIUS) break;
             ctx.beginPath();
             ctx.arc(newX, newY, 2, 0, Math.PI * 2);
             ctx.fill();
         }
     }
-
 
     const drawDamageIndicators = () => {
         ctx.font = 'bold 20px sans-serif';
@@ -495,7 +494,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30 }); // 0.5s explosion effect
 
         const { x, y, radius } = explosion;
-        const allPlayers = [playerStateRef.current, opponentStateRef.current].filter(p => p !== null);
+        const allPlayers: (PlayerState | OpponentState | null)[] = [playerStateRef.current, opponentStateRef.current];
         
         allPlayers.forEach(p => {
             if (!p) return;
@@ -510,7 +509,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                         playerStateRef.current.hp = newHp;
                     }
 
-                    const targetRole = p.id === roleRef.current ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
+                    const targetRole = p.id === roleRef.current?.substring(6) ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
                     update(ref(db, `${sRoomCode}/${targetRole}`), { hp: newHp });
                     
                     if (newHp <= 0 && p.id !== playerStateRef.current?.id) {
