@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useGameEngine, GameStatus, GunChoice } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX, Wifi } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -96,6 +96,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
               {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </Button>
             <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
+            <Wifi size={18} className="text-green-500" />
           </div>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
@@ -263,5 +264,3 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     </div>
   );
 }
-
-    
