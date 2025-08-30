@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { ref, get } from 'firebase/database';
+import { ref, get, runTransaction } from 'firebase/database';
 import { Loader2, Gamepad2, Eye, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,8 +39,12 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    
+    const currentRoom = room.trim();
+    const currentName = name.trim();
+    const currentUsername = username.trim();
 
-    if (!validUsernames.has(username.trim())) {
+    if (!validUsernames.has(currentUsername)) {
       toast({
         title: 'Invalid Username',
         description: 'Please enter a valid username to join the game.',
@@ -50,21 +54,44 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
       return;
     }
 
-    if (room.trim() && name.trim()) {
-      const sRoomCode = sanitizeKey(room.trim());
+    if (currentRoom && currentName) {
+      const sRoomCode = sanitizeKey(currentRoom);
       const roomRef = ref(db, sRoomCode);
+      
       try {
         const snapshot = await get(roomRef);
         const roomData = snapshot.val();
-        if (roomData && roomData.player1 && roomData.player2) {
-            toast({
-                title: 'Room is Full',
-                description: 'This room already has two players.',
-                variant: 'destructive',
-            });
-        } else {
-            onStartGame(room.trim(), name.trim(), username.trim());
+        
+        // Scenario 1: Room exists
+        if (roomData) {
+            const p1 = roomData.player1;
+            const p2 = roomData.player2;
+
+            const isP1Match = p1 && p1.name === currentName && p1.username === currentUsername;
+            const isP2Match = p2 && p2.name === currentName && p2.username === currentUsername;
+
+            // Scenario 1a: Player is rejoining
+            if (isP1Match || isP2Match) {
+                onStartGame(currentRoom, currentName, currentUsername);
+            } 
+            // Scenario 1b: Room is full and player is not rejoining
+            else if (p1 && p2) {
+                 toast({
+                    title: 'Room is Full',
+                    description: 'This room already has two players. You can spectate if the match is in progress.',
+                    variant: 'destructive',
+                });
+            }
+            // Scenario 1c: Room has one player, new player joins
+            else {
+                 onStartGame(currentRoom, currentName, currentUsername);
+            }
+        } 
+        // Scenario 2: Room does not exist, create it and join
+        else {
+             onStartGame(currentRoom, currentName, currentUsername);
         }
+
       } catch (error) {
         console.error("Firebase check failed:", error);
         toast({

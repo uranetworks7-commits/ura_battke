@@ -362,20 +362,43 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             }
 
             const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice };
+            
+            const p1 = roomData?.player1;
+            const p2 = roomData?.player2;
 
-            if (!roomData?.player1) {
+            if (p1 && p1.name === displayName && p1.username === playerUsername) {
                 roleRef.current = 'player1';
-                playerStateRef.current = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, vx: 0, vy: 0, dir: 'right' };
-            } else if (!roomData?.player2) {
+            } else if (p2 && p2.name === displayName && p2.username === playerUsername) {
                 roleRef.current = 'player2';
-                playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vx: 0, vy: 0, dir: 'left' };
+            } else if (!p1) {
+                roleRef.current = 'player1';
+            } else if (!p2) {
+                roleRef.current = 'player2';
             } else {
-                return;
+                 // This case should be handled by the JoinGameForm logic, but as a fallback:
+                 console.error("Room is full or player data mismatch.");
+                 return;
             }
+            
+            const existingData = roomData?.[roleRef.current];
+
+            if (existingData) { // Reconnecting
+                 playerStateRef.current = { 
+                     ...existingData, 
+                     id: roleRef.current,
+                     vx: 0, 
+                     vy: 0,
+                };
+            } else { // New player
+                 const startingX = roleRef.current === 'player1' ? 100 : CANVAS_WIDTH - 100 - PLAYER_WIDTH;
+                 const startingDir = roleRef.current === 'player1' ? 'right' : 'left';
+                 playerStateRef.current = { ...basePlayer, id: roleRef.current, x: startingX, y: GROUND_Y, vx: 0, vy: 0, dir: startingDir };
+            }
+
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
             const { id, vy, vx, ...playerData } = playerStateRef.current || {};
             set(myRef, playerData);
-            onDisconnect(myRef).remove();
+            // onDisconnect().remove() is removed to allow for reconnection
         }
 
         const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
@@ -383,12 +406,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
+            // Don't override local position for smoothness, just HP
             playerStateRef.current.hp = myData.hp;
         }
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
         
         if (opponentData) {
-            if (!opponentStateRef.current) { // Opponent just joined
+            if (!opponentStateRef.current) { // Opponent just joined or was already there
                 opponentStateRef.current = { id: opponentRole, ...opponentData };
             } else { // Opponent state is updating
                 opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
@@ -420,11 +444,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
-        const playerRole = roleRef.current;
-        if (playerRole && gameStatus !== GameStatus.ENDED) {
-            const roomRef = ref(db, `${sRoomCode}/${playerRole}`);
-            set(roomRef, null);
-        }
+        // Player data is intentionally not cleared on exit to support rejoining.
         goOffline(db);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
