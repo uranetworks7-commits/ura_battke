@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: '1v1 Arena Duel',
+  title: 'URA Arena',
   description: '1v1 Multiplayer Gun Fight Game',
 };
 

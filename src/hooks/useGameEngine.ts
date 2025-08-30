@@ -307,7 +307,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     playerImgRef.current = new Image();
     playerImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
     grenadeImgRef.current = new Image();
-    grenadeImgRef.current.src = 'https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg';
+    grenadeImgRef.current.src = 'https://i.postimg.cc/FRLXP1mf/1756586440631.png';
 
 
     const handleRoomValue = (snapshot: any) => {

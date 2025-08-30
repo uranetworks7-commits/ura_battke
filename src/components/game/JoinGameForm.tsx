@@ -152,7 +152,7 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
   return (
     <div className="flex flex-col items-center justify-center space-y-6">
       <div className="text-center">
-        <h1 className="text-5xl font-headline font-bold text-primary animate-pulse">1v1 Arena Duel</h1>
+        <h1 className="text-5xl font-headline font-bold text-primary animate-pulse">URA Arena</h1>
         <p className="text-muted-foreground mt-2">Enter a room code and nickname to begin.</p>
       </div>
       

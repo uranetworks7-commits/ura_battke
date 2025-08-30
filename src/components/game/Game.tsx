@@ -126,7 +126,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 )}
                 onClick={() => handleGunSelect('grenade')}
             >
-                <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
                 {grenadeCooldown > 0 && (
                     <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-lg">
                         {grenadeCooldown}
@@ -173,7 +173,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                 opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}>
-                <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
             </div>
           </div>
           )}
