@@ -19,7 +19,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, ping } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, ping, grenadeCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -35,37 +35,46 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key.toLowerCase()) {
-        case 'arrowleft':
-        case 'a':
-          actions.moveLeft();
-          break;
-        case 'arrowright':
-        case 'd':
-          actions.moveRight();
-          break;
-        case 'arrowup':
-        case 'w':
-        case ' ':
-          e.preventDefault();
-          actions.jump();
-          break;
-        case 'f':
-        case 'enter':
-          e.preventDefault();
-          if(!e.repeat) actions.startFire();
-          break;
-      }
+        if (e.repeat) return;
+        switch (e.key.toLowerCase()) {
+            case 'arrowleft':
+            case 'a':
+                actions.startMoveLeft();
+                break;
+            case 'arrowright':
+            case 'd':
+                actions.startMoveRight();
+                break;
+            case 'arrowup':
+            case 'w':
+            case ' ':
+                e.preventDefault();
+                actions.jump();
+                break;
+            case 'f':
+            case 'enter':
+                e.preventDefault();
+                actions.startFire();
+                break;
+        }
     };
     
     const handleKeyUp = (e: KeyboardEvent) => {
-      switch (e.key.toLowerCase()) {
-        case 'f':
-        case 'enter':
-          e.preventDefault();
-          actions.fire();
-          break;
-      }
+        switch (e.key.toLowerCase()) {
+            case 'arrowleft':
+            case 'a':
+                actions.stopMoveLeft();
+                break;
+            case 'arrowright':
+            case 'd':
+                actions.stopMoveRight();
+                break;
+            case 'f':
+            case 'enter':
+                e.preventDefault();
+                actions.fire();
+                break;
+        }
     };
 
 
@@ -132,13 +141,18 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
             </div>
             <div
-              className={cn(
-                'p-1 rounded-md cursor-pointer border-2 bg-white',
-                player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-              )}
-              onClick={() => handleGunSelect('grenade')}
+                className={cn(
+                    'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                    player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                )}
+                onClick={() => handleGunSelect('grenade')}
             >
-              <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={40} height={40} className="w-10 h-10 object-contain" />
+                <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={28} height={28} className="object-contain" />
+                {grenadeCooldown > 0 && (
+                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-lg">
+                        {grenadeCooldown}
+                    </div>
+                )}
             </div>
           </div>
         </div>
@@ -176,13 +190,11 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             >
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
             </div>
-            <div
-              className={cn(
-                'p-1 rounded-md border-2 bg-white',
+             <div className={cn(
+                'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                 opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-              )}
-            >
-              <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={40} height={40} className="w-10 h-10 object-contain" />
+              )}>
+                <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={28} height={28} className="object-contain" />
             </div>
           </div>
           )}
@@ -202,15 +214,29 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
       {/* Bottom Controls */}
        <div className="w-full max-w-lg mx-auto flex justify-between items-center p-2">
         <div className="flex gap-2">
-          <Button onPointerDown={actions.moveLeft} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowLeft size={32} /></Button>
-          <Button onPointerDown={actions.moveRight} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowRight size={32} /></Button>
+          <Button 
+            onPointerDown={actions.startMoveLeft}
+            onPointerUp={actions.stopMoveLeft}
+            onMouseLeave={actions.stopMoveLeft}
+            className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"
+          >
+            <ArrowLeft size={32} />
+          </Button>
+          <Button 
+            onPointerDown={actions.startMoveRight}
+            onPointerUp={actions.stopMoveRight}
+            onMouseLeave={actions.stopMoveRight}
+            className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"
+          >
+            <ArrowRight size={32} />
+          </Button>
         </div>
         <div className="flex gap-2">
           <Button onPointerDown={actions.jump} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowUp size={32} /></Button>
           <Button 
             onPointerDown={handleFirePress}
             onPointerUp={handleFireRelease}
-            onMouseLeave={handleFireRelease} // In case the user's mouse leaves the button while pressed
+            onMouseLeave={handleFireRelease}
             onTouchStart={(e) => { e.preventDefault(); handleFirePress(); }}
             onTouchEnd={(e) => { e.preventDefault(); handleFireRelease(); }}
             className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"

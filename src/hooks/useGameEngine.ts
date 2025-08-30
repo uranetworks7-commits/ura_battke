@@ -12,7 +12,7 @@ const PLAYER_HEIGHT = 60;
 const GROUND_Y = CANVAS_HEIGHT - PLAYER_HEIGHT - 10;
 const GRAVITY = 2;
 const JUMP_POWER = -25;
-const MOVE_SPEED = 20;
+const MOVE_SPEED = 8;
 const INITIAL_HP = 1800;
 const GRENADE_RADIUS = 10;
 const GRENADE_FUSE = 180; // 3 seconds at 60fps
@@ -66,6 +66,7 @@ interface PlayerState {
   username: string;
   x: number;
   y: number;
+  vx: number;
   vy: number;
   hp: number;
   dir: 'left' | 'right';
@@ -75,7 +76,7 @@ interface PlayerState {
   gun: GunChoice;
 }
 
-interface OpponentState extends Omit<PlayerState, 'vy'> {
+interface OpponentState extends Omit<PlayerState, 'vy' | 'vx'> {
     bullets?: Bullet[];
     grenades?: Grenade[];
 }
@@ -137,6 +138,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const afkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isThrowingGrenadeRef = useRef(false);
   const throwPowerRef = useRef(0);
+  const moveState = useRef({ left: false, right: false });
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
   const [isMuted, setIsMuted] = useState(false);
   const [ping, setPing] = useState(0);
+  const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
@@ -281,15 +284,20 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         x += dir === 'right' ? PLAYER_WIDTH : 0;
         y += PLAYER_HEIGHT / 2;
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        for(let t = 0; t < 60; t += 4) { // Draw dots for the trajectory
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.setLineDash([2, 5]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+
+        for(let t = 0; t < 60; t += 1) { // Draw dots for the trajectory
             const newX = x + velX * t;
             const newY = y + velY * t + 0.5 * (GRAVITY/2) * t * t; // Use grenade gravity
+            ctx.lineTo(newX, newY);
             if (newY > GROUND_Y + GRENADE_RADIUS) break;
-            ctx.beginPath();
-            ctx.arc(newX, newY, 2, 0, Math.PI * 2);
-            ctx.fill();
         }
+        ctx.stroke();
+        ctx.setLineDash([]);
     }
 
     const drawDamageIndicators = () => {
@@ -359,15 +367,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
             if (!roomData?.player1) {
                 roleRef.current = 'player1';
-                playerStateRef.current = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, vy: 0, dir: 'right' };
+                playerStateRef.current = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, vx: 0, vy: 0, dir: 'right' };
             } else if (!roomData?.player2) {
                 roleRef.current = 'player2';
-                playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vy: 0, dir: 'left' };
+                playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vx: 0, vy: 0, dir: 'left' };
             } else {
                 return;
             }
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
-            const { id, vy, ...playerData } = playerStateRef.current || {};
+            const { id, vy, vx, ...playerData } = playerStateRef.current || {};
             set(myRef, playerData);
             onDisconnect(myRef).remove();
         }
@@ -505,14 +513,17 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 
                 if (damage > 0) {
                     const newHp = Math.max(0, p.hp - damage);
-                    if (p.id === playerStateRef.current?.id) {
-                        playerStateRef.current.hp = newHp;
-                    }
-
-                    const targetRole = p.id === roleRef.current?.substring(6) ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
-                    update(ref(db, `${sRoomCode}/${targetRole}`), { hp: newHp });
                     
-                    if (newHp <= 0 && p.id !== playerStateRef.current?.id) {
+                    const role = p.id === playerStateRef.current?.id ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
+                    if (p.id === playerStateRef.current?.id) {
+                      playerStateRef.current.hp = newHp;
+                    }
+                    
+                    if (role) {
+                        update(ref(db, `${sRoomCode}/${role}`), { hp: newHp });
+                    }
+                    
+                    if (newHp <= 0 && opponentStateRef.current && p.id === opponentStateRef.current.id) {
                         declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
                     } else if (newHp <= 0 && p.id === playerStateRef.current?.id) {
                         declareWinner({ name: opponentStateRef.current!.name, username: opponentStateRef.current!.username }, 'elimination');
@@ -538,13 +549,26 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (gameStatus === GameStatus.PLAYING) {
+        if (moveState.current.left) player.vx = -MOVE_SPEED;
+        else if (moveState.current.right) player.vx = MOVE_SPEED;
+        else player.vx = 0;
+        
+        player.x += player.vx;
         player.vy += GRAVITY;
         player.y += player.vy;
+
         if (player.y >= GROUND_Y) {
             player.y = GROUND_Y;
             player.vy = 0;
         }
         player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
+      }
+      
+      const grenadeTimeLeft = (lastFireTimeRef.current + GUNS.grenade.cooldown) - Date.now();
+      if (player.gun === 'grenade' && grenadeTimeLeft > 0) {
+        setGrenadeCooldown(Math.ceil(grenadeTimeLeft / 1000));
+      } else {
+        setGrenadeCooldown(0);
       }
 
       const BULLET_SPEED = 10;
@@ -584,9 +608,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bullet.y < opponent.y + PLAYER_HEIGHT && bullet.y + 4 > opponent.y
             ) {
               bulletsToRemove.add(bullet.id);
-              if (opponent.hp === null || typeof opponent.hp === 'undefined' || isNaN(opponent.hp)) {
-                return;
-              }
+              if (isNaN(opponent.hp)) return;
               const damage = player.isHacker ? 100 : GUNS[bullet.gun as 'ak' | 'awm'].damage;
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
@@ -622,22 +644,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, [gameStatus, draw, sRoomCode, declareWinner]);
   
   const actions = {
-    moveLeft: () => {
-        const p = playerStateRef.current;
-        if(p && gameStatus === GameStatus.PLAYING) { 
-          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
-          p.x -= speed;
-          p.dir = 'left';
-        }
-    },
-    moveRight: () => {
-        const p = playerStateRef.current;
-        if(p && gameStatus === GameStatus.PLAYING) {
-          const speed = p.isHacker ? MOVE_SPEED * 2 : MOVE_SPEED;
-          p.x += speed;
-          p.dir = 'right';
-        }
-    },
+    startMoveLeft: () => { moveState.current.left = true; if(playerStateRef.current) playerStateRef.current.dir = 'left'; },
+    stopMoveLeft: () => { moveState.current.left = false; },
+    startMoveRight: () => { moveState.current.right = true; if(playerStateRef.current) playerStateRef.current.dir = 'right'; },
+    stopMoveRight: () => { moveState.current.right = false; },
     jump: () => {
         const p = playerStateRef.current;
         if(p && gameStatus === GameStatus.PLAYING && p.y >= GROUND_Y) {
@@ -662,10 +672,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         
         const gunInfo = GUNS[p.gun];
         if (now - lastFireTimeRef.current > gunInfo.cooldown) {
+            if (p.gun === 'grenade') {
+                if (!isThrowingGrenadeRef.current) return;
+            }
             lastFireTimeRef.current = now;
 
             if (p.gun === 'grenade') {
-                if (!isThrowingGrenadeRef.current) return; // Don't throw if not started
                 isThrowingGrenadeRef.current = false;
 
                 const power = throwPowerRef.current;
@@ -722,5 +734,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, ping };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, ping, grenadeCooldown };
 }
