@@ -525,8 +525,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                     
                     if (newHp <= 0 && opponentStateRef.current && p.id === opponentStateRef.current.id) {
                         declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
-                    } else if (newHp <= 0 && p.id === playerStateRef.current?.id) {
-                        declareWinner({ name: opponentStateRef.current!.name, username: opponentStateRef.current!.username }, 'elimination');
+                    } else if (newHp <= 0 && p.id === playerStateRef.current?.id && opponentStateRef.current) {
+                        declareWinner({ name: opponentStateRef.current.name, username: opponentStateRef.current.username }, 'elimination');
                     }
                 }
             }
