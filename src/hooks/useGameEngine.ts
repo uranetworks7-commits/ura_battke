@@ -292,7 +292,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
         for(let t = 0; t < 60; t += 1) { // Draw dots for the trajectory
             const newX = x + velX * t;
-            const newY = y + velY * t + 0.5 * (GRAVITY/2) * t * t; // Use grenade gravity
+            const newY = y + velY * t + 0.5 * (GRAVITY/2) * t * t;
             ctx.lineTo(newX, newY);
             if (newY > GROUND_Y + GRENADE_RADIUS) break;
         }
@@ -385,16 +385,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
-            if(myData.hp < playerStateRef.current.hp){
-                const damage = playerStateRef.current.hp - myData.hp;
-                damageIndicatorsRef.current.push({
-                    id: `dmg-${Date.now()}`,
-                    amount: damage,
-                    x: playerStateRef.current.x + PLAYER_WIDTH / 2,
-                    y: playerStateRef.current.y - 10,
-                    life: 60 // 60 frames = 1 second
-                });
-            }
             playerStateRef.current.hp = myData.hp;
         }
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
@@ -512,11 +502,21 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 const damage = Math.round(GUNS.grenade.damage * falloff);
                 
                 if (damage > 0) {
+                    if (isNaN(p.hp)) return;
                     const newHp = Math.max(0, p.hp - damage);
                     
                     const role = p.id === playerStateRef.current?.id ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
-                    if (p.id === playerStateRef.current?.id) {
-                      playerStateRef.current.hp = newHp;
+
+                    if (p.id !== playerStateRef.current?.id) {
+                        damageIndicatorsRef.current.push({
+                            id: `dmg-${Date.now()}`,
+                            amount: damage,
+                            x: p.x + PLAYER_WIDTH / 2,
+                            y: p.y - 10,
+                            life: 60
+                        });
+                    } else {
+                       if (playerStateRef.current) playerStateRef.current.hp = newHp;
                     }
                     
                     if (role) {
@@ -610,6 +610,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               bulletsToRemove.add(bullet.id);
               if (isNaN(opponent.hp)) return;
               const damage = player.isHacker ? 100 : GUNS[bullet.gun as 'ak' | 'awm'].damage;
+
+              damageIndicatorsRef.current.push({
+                  id: `dmg-${Date.now()}`,
+                  amount: damage,
+                  x: opponent.x + PLAYER_WIDTH / 2,
+                  y: opponent.y - 10,
+                  life: 60
+              });
+
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
