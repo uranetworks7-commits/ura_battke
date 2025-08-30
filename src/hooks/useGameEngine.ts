@@ -332,12 +332,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     grenadeImgRef.current = new Image();
     grenadeImgRef.current.src = 'https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg';
 
-
     const handleRoomValue = (snapshot: any) => {
         const roomData = snapshot.val();
-        if (!roomData && gameStatus !== GameStatus.WAITING) return;
+        if (!roomData) return;
 
-        if (roomData?.winner) {
+        if (roomData.winner) {
             if (winner) return;
             const winnerInfo = roomData.winner;
             setWinner(winnerInfo.winner.name);
@@ -347,51 +346,35 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         }
 
         if (!roleRef.current) {
-            let isHacker = false;
-            let hackerType: '' | '225' | '226' = '';
-            let displayName = playerName;
-
-            if(playerName.includes(HACKER_CODE_225)) {
-                isHacker = true;
-                hackerType = '225';
-                displayName = playerName.replace(HACKER_CODE_225, '');
-            } else if (playerName.includes(HACKER_CODE_226)) {
-                isHacker = true;
-                hackerType = '226';
-                displayName = playerName.replace(HACKER_CODE_226, '');
-            }
-
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice };
-
-            if (!roomData?.player1) {
+            if (roomData.player1?.name === playerName) {
                 roleRef.current = 'player1';
-                playerStateRef.current = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, vx: 0, vy: 0, dir: 'right' };
-            } else if (!roomData?.player2) {
+            } else if (roomData.player2?.name === playerName) {
                 roleRef.current = 'player2';
-                playerStateRef.current = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, vx: 0, vy: 0, dir: 'left' };
             } else {
-                toast({
-                    title: 'Room is Full',
-                    description: 'This room already has two players.',
-                    variant: 'destructive',
-                });
+                // This case should ideally not happen with the new transaction logic
+                console.error("Could not find my player data in the room.");
                 return;
             }
             const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
-            const { id, vy, vx, ...playerData } = playerStateRef.current || {};
-            set(myRef, playerData);
             onDisconnect(myRef).remove();
         }
 
-        const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
-        const myData = roomData?.[roleRef.current!];
-        const opponentData = roomData?.[opponentRole];
-
-        if (myData && playerStateRef.current) {
+        const myData = roomData[roleRef.current!];
+        if (!playerStateRef.current && myData) {
+            playerStateRef.current = {
+                ...myData,
+                vx: 0,
+                vy: 0,
+            };
+        } else if (playerStateRef.current && myData) {
             playerStateRef.current.hp = myData.hp;
         }
+
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak' });
-        
+
+        const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
+        const opponentData = roomData[opponentRole];
+
         if (opponentData) {
             if (!opponentStateRef.current) { // Opponent just joined
                 opponentStateRef.current = { id: opponentRole, ...opponentData };
@@ -412,11 +395,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
             lastOpponentBulletCount.current = 0;
         }
-        
-        if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
+
+        if (roomData.player1 && roomData.player2 && gameStatus === GameStatus.WAITING) {
             setGameStatus(GameStatus.PLAYING);
         }
-
     };
     
     onValue(roomPathRef.current, handleRoomValue);
@@ -743,5 +725,3 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
 }
-
-    

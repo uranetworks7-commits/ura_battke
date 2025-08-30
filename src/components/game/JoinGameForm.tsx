@@ -7,10 +7,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { ref, get } from 'firebase/database';
+import { ref, get, runTransaction, serverTimestamp } from 'firebase/database';
 import { Loader2, Gamepad2, Eye, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
+import type { GunChoice } from '@/hooks/useGameEngine';
 
 type JoinGameFormProps = {
   onStartGame: (room: string, name: string, username: string) => void;
@@ -27,6 +27,16 @@ const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
 type Mode = 'game' | 'view' | 'manual';
 
+const INITIAL_HP = 1800;
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 450;
+const PLAYER_WIDTH = 30;
+const PLAYER_HEIGHT = 60;
+const GROUND_Y = CANVAS_HEIGHT - PLAYER_HEIGHT - 10;
+const HACKER_CODE_225 = '#225';
+const HACKER_CODE_226 = '#226';
+
+
 export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormProps) {
   const [mode, setMode] = useState<Mode>('game');
   const [room, setRoom] = useState('');
@@ -38,6 +48,7 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!room.trim() || !name.trim() || !username.trim()) return;
     setIsLoading(true);
 
     if (!validUsernames.has(username.trim())) {
@@ -50,10 +61,76 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
       return;
     }
 
-    if (room.trim() && name.trim()) {
-      onStartGame(room.trim(), name.trim(), username.trim());
-    } else {
-        // This part may not be strictly necessary if the 'required' attribute on inputs works
+    const sRoomCode = sanitizeKey(room.trim());
+    const roomRef = ref(db, sRoomCode);
+
+    try {
+        await runTransaction(roomRef, (currentData) => {
+            if (currentData && currentData.player1 && currentData.player2) {
+                // Room is full, abort transaction by returning undefined
+                return;
+            }
+
+            let isHacker = false;
+            let hackerType: '' | '225' | '226' = '';
+            let displayName = name.trim();
+
+            if(displayName.includes(HACKER_CODE_225)) {
+                isHacker = true;
+                hackerType = '225';
+                displayName = displayName.replace(HACKER_CODE_225, '');
+            } else if (displayName.includes(HACKER_CODE_226)) {
+                isHacker = true;
+                hackerType = '226';
+                displayName = displayName.replace(HACKER_CODE_226, '');
+            }
+
+            const basePlayer = { 
+                name: displayName, 
+                username: username.trim(), 
+                hp: INITIAL_HP, 
+                isHacker, 
+                hackerType, 
+                lastUpdate: serverTimestamp(), 
+                gun: 'ak' as GunChoice 
+            };
+
+            if (!currentData) {
+                currentData = {};
+            }
+
+            if (!currentData.player1) {
+                currentData.player1 = { ...basePlayer, id: 'p1', x: 100, y: GROUND_Y, dir: 'right' };
+            } else if (!currentData.player2) {
+                currentData.player2 = { ...basePlayer, id: 'p2', x: CANVAS_WIDTH - 100 - PLAYER_WIDTH, y: GROUND_Y, dir: 'left' };
+            }
+
+            return currentData;
+        });
+
+        const finalRoomState = await get(roomRef);
+        if (finalRoomState.val() && finalRoomState.val().player1 && finalRoomState.val().player2) {
+            const myData = finalRoomState.val().player1.name === name.trim() ? finalRoomState.val().player1 : finalRoomState.val().player2;
+            if (myData.name !== name.trim()) { // A failsafe check
+                 toast({
+                    title: 'Room is full',
+                    description: 'Another player joined just before you.',
+                    variant: 'destructive',
+                });
+                setIsLoading(false);
+                return;
+            }
+        }
+        
+        onStartGame(room.trim(), name.trim(), username.trim());
+
+    } catch (error) {
+        console.error("Join transaction failed:", error);
+        toast({
+            title: 'Failed to join room',
+            description: 'The room might be full or there was a connection issue.',
+            variant: 'destructive',
+        });
         setIsLoading(false);
     }
   };
@@ -194,5 +271,3 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
     </div>
   );
 }
-
-    
