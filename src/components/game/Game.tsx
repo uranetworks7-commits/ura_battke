@@ -25,6 +25,14 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     actions.selectGun(gun);
   }
 
+  const handleFirePress = () => {
+    actions.startFire();
+  };
+
+  const handleFireRelease = () => {
+    actions.fire();
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key.toLowerCase()) {
@@ -45,14 +53,28 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
         case 'f':
         case 'enter':
           e.preventDefault();
+          if(!e.repeat) actions.startFire();
+          break;
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      switch (e.key.toLowerCase()) {
+        case 'f':
+        case 'enter':
+          e.preventDefault();
           actions.fire();
           break;
       }
     };
 
+
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, [actions]);
 
@@ -109,6 +131,15 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             >
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
             </div>
+            <div
+              className={cn(
+                'p-1 rounded-md cursor-pointer border-2 bg-white',
+                player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+              )}
+              onClick={() => handleGunSelect('grenade')}
+            >
+              <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={40} height={40} className="w-10 h-10 object-contain" />
+            </div>
           </div>
         </div>
 
@@ -145,6 +176,14 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             >
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
             </div>
+            <div
+              className={cn(
+                'p-1 rounded-md border-2 bg-white',
+                opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+              )}
+            >
+              <Image src="https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg" alt="Grenade" width={40} height={40} className="w-10 h-10 object-contain" />
+            </div>
           </div>
           )}
         </div>
@@ -168,7 +207,14 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
         </div>
         <div className="flex gap-2">
           <Button onPointerDown={actions.jump} className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"><ArrowUp size={32} /></Button>
-          <Button onPointerDown={actions.fire} className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"><Zap size={40} /></Button>
+          <Button 
+            onPointerDown={handleFirePress}
+            onPointerUp={handleFireRelease}
+            onMouseLeave={handleFireRelease} // In case the user's mouse leaves the button while pressed
+            onTouchStart={(e) => { e.preventDefault(); handleFirePress(); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleFireRelease(); }}
+            className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"
+          ><Zap size={40} /></Button>
         </div>
       </div>
 

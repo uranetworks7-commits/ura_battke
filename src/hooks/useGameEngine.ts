@@ -14,6 +14,8 @@ const GRAVITY = 2;
 const JUMP_POWER = -25;
 const MOVE_SPEED = 20;
 const INITIAL_HP = 1800;
+const GRENADE_RADIUS = 10;
+const GRENADE_FUSE = 180; // 3 seconds at 60fps
 
 const GUNS = {
   ak: {
@@ -26,6 +28,11 @@ const GUNS = {
     cooldown: 2000,
     bulletColor: '#00FF00', // Stylish green
   },
+  grenade: {
+    damage: 294, // Max damage
+    cooldown: 10000, // 10 seconds
+    blastRadius: 150,
+  }
 };
 
 const HACKER_CODE_225 = '#225';
@@ -40,7 +47,7 @@ export enum GameStatus {
   ENDED,
 }
 
-export type GunChoice = 'ak' | 'awm';
+export type GunChoice = 'ak' | 'awm' | 'grenade';
 
 interface PlayerDetails {
   name: string;
@@ -70,6 +77,7 @@ interface PlayerState {
 
 interface OpponentState extends Omit<PlayerState, 'vy'> {
     bullets?: Bullet[];
+    grenades?: Grenade[];
 }
 
 interface Bullet {
@@ -78,6 +86,24 @@ interface Bullet {
   y: number;
   dir: number;
   gun: GunChoice;
+}
+
+interface Grenade {
+    id: string;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    fuse: number;
+    ownerId: string;
+}
+
+interface Explosion {
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    life: number; // Time to live in frames
 }
 
 interface DamageIndicator {
@@ -100,12 +126,17 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const roleRef = useRef<'player1' | 'player2' | null>(null);
   
   const bulletsRef = useRef<Bullet[]>([]);
+  const grenadesRef = useRef<Grenade[]>([]);
+  const explosionsRef = useRef<Explosion[]>([]);
   const opponentBulletsRef = useRef<Bullet[]>([]);
+  const opponentGrenadesRef = useRef<Grenade[]>([]);
   const lastOpponentBulletCount = useRef(0);
   const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
   const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const afkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isThrowingGrenadeRef = useRef(false);
+  const throwPowerRef = useRef(0);
 
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
@@ -117,6 +148,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const playerImgRef = useRef<HTMLImageElement | null>(null);
+  const grenadeImgRef = useRef<HTMLImageElement | null>(null);
 
   const audioRefs = useRef<{
     ak_fire?: HTMLAudioElement;
@@ -213,10 +245,53 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     const drawBullets = (bullets: Bullet[] | undefined) => {
         if (!bullets) return;
         bullets.forEach(b => {
-          ctx.fillStyle = GUNS[b.gun].bulletColor;
+          ctx.fillStyle = GUNS[b.gun as 'ak' | 'awm'].bulletColor;
           ctx.fillRect(b.x, b.y, 8, 4)
         });
     }
+
+    const drawGrenades = (grenades: Grenade[] | undefined) => {
+        if (!grenades || !grenadeImgRef.current?.complete) return;
+        grenades.forEach(g => {
+            ctx.drawImage(grenadeImgRef.current!, g.x - GRENADE_RADIUS, g.y - GRENADE_RADIUS, GRENADE_RADIUS * 2, GRENADE_RADIUS * 2);
+        });
+    }
+
+    const drawExplosions = () => {
+        explosionsRef.current.forEach(exp => {
+            const alpha = exp.life / 30; // Fade out over 0.5s
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, exp.radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = `rgba(255, 165, 0, ${alpha})`;
+            ctx.fill();
+        });
+    }
+    
+    const drawTrajectory = () => {
+        if (!isThrowingGrenadeRef.current || !playerStateRef.current) return;
+        
+        let { x, y, dir } = playerStateRef.current;
+        const power = throwPowerRef.current;
+        const angle = -Math.PI / 4; // 45 degrees up
+        const dirMultiplier = dir === 'right' ? 1 : -1;
+        
+        let velX = Math.cos(angle) * power * dirMultiplier;
+        let velY = Math.sin(angle) * power;
+        
+        x += dir === 'right' ? PLAYER_WIDTH : 0;
+        y += PLAYER_HEIGHT / 2;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        for(let t = 0; t < 60; t += 4) { // Draw dots for the trajectory
+            const newX = x + velX * t;
+            const newY = y + velY * t + 0.5 * GRAVITY * t * t;
+            if (newY > GROUND_Y + GRENADE_RADIUS) break;
+            ctx.beginPath();
+            ctx.arc(newX, newY, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
 
     const drawDamageIndicators = () => {
         ctx.font = 'bold 20px sans-serif';
@@ -235,6 +310,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
     drawBullets(bulletsRef.current);
     drawBullets(opponentBulletsRef.current);
+    drawGrenades(grenadesRef.current);
+    drawGrenades(opponentGrenadesRef.current);
+    drawExplosions();
+    drawTrajectory();
     drawDamageIndicators();
 
   }, [canvasRef, gameStatus]);
@@ -245,6 +324,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     bgImgRef.current.src = 'https://i.postimg.cc/y8ZBRDXQ/mmm.png';
     playerImgRef.current = new Image();
     playerImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
+    grenadeImgRef.current = new Image();
+    grenadeImgRef.current.src = 'https://i.postimg.cc/hvfSwzgc/image-search-1756543245695.jpg';
+
 
     const handleRoomValue = (snapshot: any) => {
         const roomData = snapshot.val();
@@ -317,13 +399,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 opponentStateRef.current = { ...opponentStateRef.current, ...opponentData };
             }
             opponentBulletsRef.current = opponentData.bullets || [];
+            opponentGrenadesRef.current = opponentData.grenades || [];
+
 
             if(opponentData.lastUpdate){
                 const latency = Date.now() - opponentData.lastUpdate;
                 setPing(Math.min(999, Math.max(1, latency)));
             }
 
-            if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun) {
+            if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun && opponentData.gun !== 'grenade') {
                 playSound(opponentData.gun === 'ak' ? 'ak_fire' : 'awm_fire');
             }
             lastOpponentBulletCount.current = opponentBulletsRef.current.length;
@@ -406,6 +490,39 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     };
   }, [gameStatus, declareWinner, winner]);
 
+    const handleExplosion = (explosion: Omit<Explosion, 'id' | 'life'>) => {
+        playSound('awm_fire');
+        explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30 }); // 0.5s explosion effect
+
+        const { x, y, radius } = explosion;
+        const allPlayers = [playerStateRef.current, opponentStateRef.current].filter(p => p !== null);
+        
+        allPlayers.forEach(p => {
+            if (!p) return;
+            const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
+            if (dist < radius) {
+                const falloff = 1 - (dist / radius);
+                const damage = Math.round(GUNS.grenade.damage * falloff);
+                
+                if (damage > 0) {
+                    const newHp = Math.max(0, p.hp - damage);
+                    if (p.id === playerStateRef.current?.id) {
+                        playerStateRef.current.hp = newHp;
+                    }
+
+                    const targetRole = p.id === roleRef.current ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
+                    update(ref(db, `${sRoomCode}/${targetRole}`), { hp: newHp });
+                    
+                    if (newHp <= 0 && p.id !== playerStateRef.current?.id) {
+                        declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
+                    } else if (newHp <= 0 && p.id === playerStateRef.current?.id) {
+                        declareWinner({ name: opponentStateRef.current!.name, username: opponentStateRef.current!.username }, 'elimination');
+                    }
+                }
+            }
+        });
+    };
+
   useEffect(() => {
     let animationFrameId: number;
     const gameLoop = () => {
@@ -417,6 +534,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       
       const player = playerStateRef.current;
       
+      if(isThrowingGrenadeRef.current) {
+          throwPowerRef.current = Math.min(30, throwPowerRef.current + 0.5);
+      }
+
       if (gameStatus === GameStatus.PLAYING) {
         player.vy += GRAVITY;
         player.y += player.vy;
@@ -430,6 +551,29 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
       
+      grenadesRef.current.forEach(g => {
+          g.vy += GRAVITY / 2; // Grenades are heavier
+          g.x += g.vx;
+          g.y += g.vy;
+
+          // Bouncing
+          if(g.y >= GROUND_Y + GRENADE_RADIUS) {
+              g.y = GROUND_Y + GRENADE_RADIUS;
+              g.vy *= -0.5; // Lose energy on bounce
+              g.vx *= 0.8;
+          }
+          if(g.x <= 0 || g.x >= CANVAS_WIDTH) {
+              g.vx *= -0.5;
+          }
+
+          g.fuse--;
+          if (g.fuse <= 0) {
+              handleExplosion({ x: g.x, y: g.y, radius: GUNS.grenade.blastRadius });
+          }
+      });
+      grenadesRef.current = grenadesRef.current.filter(g => g.fuse > 0);
+
+      explosionsRef.current = explosionsRef.current.map(exp => ({ ...exp, life: exp.life - 1 })).filter(exp => exp.life > 0);
       damageIndicatorsRef.current = damageIndicatorsRef.current.map(ind => ({ ...ind, y: ind.y - 0.5, life: ind.life - 1 })).filter(ind => ind.life > 0);
 
       const opponent = opponentStateRef.current;
@@ -444,7 +588,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               if (opponent.hp === null || typeof opponent.hp === 'undefined' || isNaN(opponent.hp)) {
                 return;
               }
-              const damage = player.isHacker ? 100 : GUNS[bullet.gun].damage;
+              const damage = player.isHacker ? 100 : GUNS[bullet.gun as 'ak' | 'awm'].damage;
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
               update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
@@ -465,6 +609,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           dir: playerData.dir,
           gun: playerData.gun,
           bullets: bulletsRef.current,
+          grenades: grenadesRef.current,
           lastUpdate: serverTimestamp()
         });
       }
@@ -501,14 +646,44 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           p.vy = power;
         }
     },
+    startFire: () => {
+        const p = playerStateRef.current;
+        if (p && gameStatus === GameStatus.PLAYING && p.gun === 'grenade') {
+            const now = Date.now();
+            if (now - lastFireTimeRef.current > GUNS.grenade.cooldown) {
+                 isThrowingGrenadeRef.current = true;
+                 throwPowerRef.current = 15; // min power
+            }
+        }
+    },
     fire: () => {
         const p = playerStateRef.current;
         const now = Date.now();
-        if(p && gameStatus === GameStatus.PLAYING) {
-            const gun = GUNS[p.gun];
-            if (now - lastFireTimeRef.current > gun.cooldown) {
+        if(!p || gameStatus !== GameStatus.PLAYING) return;
+        
+        const gunInfo = GUNS[p.gun];
+        if (now - lastFireTimeRef.current > gunInfo.cooldown) {
+            lastFireTimeRef.current = now;
+
+            if (p.gun === 'grenade') {
+                if (!isThrowingGrenadeRef.current) return; // Don't throw if not started
+                isThrowingGrenadeRef.current = false;
+
+                const power = throwPowerRef.current;
+                const angle = -Math.PI / 4; // 45 degrees up
+                const dirMultiplier = p.dir === 'right' ? 1 : -1;
+                
+                grenadesRef.current.push({
+                    id: `${now}-${Math.random()}`,
+                    x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : 0),
+                    y: p.y + PLAYER_HEIGHT / 2,
+                    vx: Math.cos(angle) * power * dirMultiplier,
+                    vy: Math.sin(angle) * power,
+                    fuse: GRENADE_FUSE,
+                    ownerId: p.id
+                });
+            } else { // ak or awm
                 playSound(`${p.gun}_fire`);
-                lastFireTimeRef.current = now;
                 const fireCount = p.isHacker ? 20 : 1;
                 for(let i = 0; i < fireCount; i++) {
                   bulletsRef.current.push({
