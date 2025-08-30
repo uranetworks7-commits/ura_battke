@@ -4,11 +4,10 @@ import { useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useGameEngine, GameStatus, GunChoice } from '@/hooks/useGameEngine';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX, Wifi } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Zap, ShieldAlert, XCircle, Volume2, VolumeX } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type GameProps = {
   roomCode: string;
@@ -19,7 +18,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, ping, grenadeCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -87,12 +86,6 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     };
   }, [actions]);
 
-  const getPingColor = (p: number) => {
-    if (p < 100) return 'text-green-400';
-    if (p < 200) return 'text-yellow-400';
-    return 'text-red-400';
-  }
-
   return (
     <div className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 gap-4 w-full h-full max-w-7xl mx-auto">
       {/* Top Bar: Players Info & Gun Selection */}
@@ -103,21 +96,6 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
               {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </Button>
             <p className="font-headline text-primary truncate ">{player?.name || 'Player'}</p>
-             {gameStatus === GameStatus.PLAYING && (
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger>
-                            <div className="flex items-center gap-1">
-                                <Wifi size={16} className={getPingColor(ping)} />
-                                <span className={cn("font-mono text-xs", getPingColor(ping))}>{ping}ms</span>
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Your connection quality</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            )}
           </div>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
@@ -285,3 +263,5 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     </div>
   );
 }
+
+    

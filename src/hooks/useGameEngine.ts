@@ -144,9 +144,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [winner, setWinner] = useState<string | null>(null);
   const [cheaterDetected, setCheaterDetected] = useState(false);
   const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice });
-  const [opponentUI, setOpponentUI] =useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
+  const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice });
   const [isMuted, setIsMuted] = useState(false);
-  const [ping, setPing] = useState(0);
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
@@ -293,8 +292,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         for(let t = 0; t < 60; t += 1) { // Draw dots for the trajectory
             const newX = x + velX * t;
             const newY = y + velY * t + 0.5 * (GRAVITY/2) * t * t;
-            ctx.lineTo(newX, newY);
             if (newY > GROUND_Y + GRENADE_RADIUS) break;
+            ctx.lineTo(newX, newY);
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -398,14 +397,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentBulletsRef.current = opponentData.bullets || [];
             opponentGrenadesRef.current = opponentData.grenades || [];
 
-
-            if(opponentData.lastUpdate){
-                const latency = Date.now() - opponentData.lastUpdate;
-                // Cap the ping at 300 and add some randomness to make it feel more natural
-                const displayPing = Math.min(300, latency + Math.floor(Math.random() * 30) - 15);
-                setPing(Math.max(1, displayPing));
-            }
-
             if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun && opponentData.gun !== 'grenade') {
                 playSound(opponentData.gun === 'ak' ? 'ak_fire' : 'awm_fire');
             }
@@ -416,7 +407,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = null;
             setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' });
             lastOpponentBulletCount.current = 0;
-            setPing(0);
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -623,7 +613,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
               const newHp = Math.max(0, opponent.hp - damage);
               const oppRole = roleRef.current === 'player1' ? 'player2' : 'player1';
-              update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
+              if(!isNaN(newHp)) {
+                update(ref(db, `${sRoomCode}/${oppRole}`), { hp: newHp });
+              }
               
               if (newHp <= 0 && player) {
                   declareWinner({ name: player.name, username: player.username }, 'elimination');
@@ -745,5 +737,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, ping, grenadeCooldown };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
 }
+
+    
