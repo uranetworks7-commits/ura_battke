@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { ref, onValue, set, update, onDisconnect, goOffline, goOnline, off, serverTimestamp } from 'firebase/database';
+import { ref, onValue, set, update, onDisconnect, goOffline, goOnline, off, serverTimestamp, runTransaction } from 'firebase/database';
 import { useToast } from './use-toast';
 
 const CANVAS_WIDTH = 800;
@@ -179,36 +179,35 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   }, [isMuted]);
 
   const declareWinner = useCallback((winnerDetails: PlayerDetails, reason: WinnerInfo['reason']) => {
-    onValue(ref(db, `${sRoomCode}/winner`), (snapshot) => {
-        if (snapshot.exists()) {
-             return; // Winner already declared
-        }
-
-        const player = playerStateRef.current;
-        const opponent = opponentStateRef.current;
-        
-        let player1Details: PlayerDetails | null = null;
-        let player2Details: PlayerDetails | null = null;
-
-        if (roleRef.current === 'player1') {
-            player1Details = player ? { name: player.name, username: player.username } : null;
-            player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-        } else {
-            player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
-            player2Details = player ? { name: player.name, username: player.username } : null;
-        }
-
-        const finalWinnerInfo: WinnerInfo = {
-          winner: winnerDetails,
-          reason,
-          player1: player1Details,
-          player2: player2Details,
-        };
-        
-        update(roomPathRef.current, { winner: finalWinnerInfo });
-
-    }, { onlyOnce: true });
-
+      const winnerRef = ref(db, `${sRoomCode}/winner`);
+      runTransaction(winnerRef, (currentData) => {
+          if (currentData === null) { // No winner has been declared yet
+              const player = playerStateRef.current;
+              const opponent = opponentStateRef.current;
+              
+              let player1Details: PlayerDetails | null = null;
+              let player2Details: PlayerDetails | null = null;
+      
+              if (roleRef.current === 'player1') {
+                  player1Details = player ? { name: player.name, username: player.username } : null;
+                  player2Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+              } else {
+                  player1Details = opponent ? { name: opponent.name, username: opponent.username } : null;
+                  player2Details = player ? { name: player.name, username: player.username } : null;
+              }
+      
+              const finalWinnerInfo: WinnerInfo = {
+                winner: winnerDetails,
+                reason,
+                player1: player1Details,
+                player2: player2Details,
+              };
+              return finalWinnerInfo;
+          } else {
+              // A winner already exists, so abort the transaction
+              return; 
+          }
+      });
   }, [sRoomCode]);
 
   const draw = useCallback(() => {
