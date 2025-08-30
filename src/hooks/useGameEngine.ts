@@ -401,7 +401,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
             if(opponentData.lastUpdate){
                 const latency = Date.now() - opponentData.lastUpdate;
-                setPing(Math.min(999, Math.max(1, latency)));
+                // Cap the ping at 300 and add some randomness to make it feel more natural
+                const displayPing = Math.min(300, latency + Math.floor(Math.random() * 30) - 15);
+                setPing(Math.max(1, displayPing));
             }
 
             if (opponentBulletsRef.current.length > lastOpponentBulletCount.current && opponentData.gun && opponentData.gun !== 'grenade') {
