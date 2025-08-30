@@ -205,7 +205,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           player2: player2Details,
         };
         
-        update(ref(db, sRoomCode), { winner: finalWinnerInfo });
+        update(roomPathRef.current, { winner: finalWinnerInfo });
 
     }, { onlyOnce: true });
 
@@ -322,7 +322,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     drawTrajectory();
     drawDamageIndicators();
 
-  }, [canvasRef, gameStatus]);
+  }, [canvasRef, gameStatus, declareWinner]);
   
   useEffect(() => {
     goOnline(db);
@@ -739,5 +739,3 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
 }
-
-    
