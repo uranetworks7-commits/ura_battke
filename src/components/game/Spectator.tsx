@@ -25,6 +25,7 @@ interface PlayerState {
   name: string;
   dir: 'left' | 'right';
   bullets: Bullet[];
+  id: 'player1' | 'player2';
 }
 
 interface Bullet {
@@ -45,13 +46,16 @@ export function Spectator({ roomCode, onExit }: SpectatorProps) {
   const [winnerName, setWinnerName] = useState<string | null>(null);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
-  const playerImgRef = useRef<HTMLImageElement | null>(null);
+  const player1ImgRef = useRef<HTMLImageElement | null>(null);
+  const player2ImgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     bgImgRef.current = new Image();
     bgImgRef.current.src = 'https://i.postimg.cc/y8ZBRDXQ/mmm.png';
-    playerImgRef.current = new Image();
-    playerImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
+    player1ImgRef.current = new Image();
+    player1ImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
+    player2ImgRef.current = new Image();
+    player2ImgRef.current.src = 'https://i.postimg.cc/BnxjBkg4/1756607104764.png';
 
     const handleRoomValue = (snapshot: any) => {
         const roomData = snapshot.val();
@@ -60,8 +64,8 @@ export function Spectator({ roomCode, onExit }: SpectatorProps) {
             return;
         }
 
-        if (roomData.player1) setPlayer1(roomData.player1);
-        if (roomData.player2) setPlayer2(roomData.player2);
+        if (roomData.player1) setPlayer1({...roomData.player1, id: 'player1' });
+        if (roomData.player2) setPlayer2({...roomData.player2, id: 'player2' });
         
         if (roomData.winner) {
             setWinnerName(roomData.winner.name);
@@ -93,12 +97,14 @@ export function Spectator({ roomCode, onExit }: SpectatorProps) {
     
     const drawEntity = (entity: PlayerState | null) => {
       if (!entity) return;
-      if (playerImgRef.current?.complete) {
+      const imageToUse = entity.id === 'player1' ? player1ImgRef.current : player2ImgRef.current;
+
+      if (imageToUse?.complete) {
         ctx.save();
         const flip = entity.dir === 'left';
         ctx.translate(entity.x + (flip ? PLAYER_WIDTH : 0), entity.y);
         if (flip) ctx.scale(-1, 1);
-        ctx.drawImage(playerImgRef.current, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
+        ctx.drawImage(imageToUse, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
         ctx.restore();
       } else {
         ctx.fillStyle = '#00FFFF';

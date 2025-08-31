@@ -147,7 +147,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
-  const playerImgRef = useRef<HTMLImageElement | null>(null);
+  const player1ImgRef = useRef<HTMLImageElement | null>(null);
+  const player2ImgRef = useRef<HTMLImageElement | null>(null);
   const grenadeImgRef = useRef<HTMLImageElement | null>(null);
 
   const audioRefs = useRef<{
@@ -205,17 +206,20 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     const player = playerStateRef.current;
     const opponent = opponentUI;
 
-    const drawEntity = (entity: PlayerState | OpponentState | null, isPlayer: boolean) => {
+    const drawEntity = (entity: PlayerState | OpponentState | null) => {
       if (!entity) return;
-      if (playerImgRef.current?.complete) {
+      
+      const imageToUse = entity.id === 'player1' ? player1ImgRef.current : player2ImgRef.current;
+
+      if (imageToUse?.complete) {
         ctx.save();
         const flip = entity.dir === 'left';
         ctx.translate(entity.x + (flip ? PLAYER_WIDTH : 0), entity.y);
         if (flip) ctx.scale(-1, 1);
-        ctx.drawImage(playerImgRef.current, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
+        ctx.drawImage(imageToUse, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
         ctx.restore();
       } else {
-        ctx.fillStyle = isPlayer ? '#00FFFF' : '#FF4136';
+        ctx.fillStyle = entity.id === roleRef.current ? '#00FFFF' : '#FF4136';
         ctx.fillRect(entity.x, entity.y, PLAYER_WIDTH, PLAYER_HEIGHT);
       }
     };
@@ -287,8 +291,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         ctx.globalAlpha = 1.0; // Reset alpha
     };
 
-    drawEntity(player, true);
-    if(gameStatus === GameStatus.PLAYING) drawEntity(opponentStateRef.current, false);
+    drawEntity(player);
+    if(gameStatus === GameStatus.PLAYING) drawEntity(opponentStateRef.current);
 
     drawBullets(bulletsRef.current);
     drawBullets(opponentUI.bullets);
@@ -304,8 +308,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     goOnline(db);
     bgImgRef.current = new Image();
     bgImgRef.current.src = 'https://i.postimg.cc/y8ZBRDXQ/mmm.png';
-    playerImgRef.current = new Image();
-    playerImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
+    player1ImgRef.current = new Image();
+    player1ImgRef.current.src = 'https://i.postimg.cc/6qbwrRmS/Player1.png';
+    player2ImgRef.current = new Image();
+    player2ImgRef.current.src = 'https://i.postimg.cc/BnxjBkg4/1756607104764.png';
     grenadeImgRef.current = new Image();
     grenadeImgRef.current.src = 'https://i.postimg.cc/FRLXP1mf/1756586440631.png';
 
