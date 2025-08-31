@@ -145,6 +145,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice, bullets: [], grenades: [] });
   const [isMuted, setIsMuted] = useState(false);
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
+  const [awmCooldown, setAwmCooldown] = useState(0);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const player1ImgRef = useRef<HTMLImageElement | null>(null);
@@ -555,17 +556,16 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, player.x));
       }
       
-      if (player.lastGrenadeTime > 0) {
-        const grenadeTimeLeft = (player.lastGrenadeTime + GUNS.grenade.cooldown) - Date.now();
-        if (grenadeTimeLeft > 0) {
-          setGrenadeCooldown(Math.ceil(grenadeTimeLeft / 1000));
-        } else {
-          setGrenadeCooldown(0);
-        }
+      // Cooldown Timers
+      if (player.gun === 'awm') {
+          const awmTimeLeft = (lastFireTimeRef.current + GUNS.awm.cooldown) - Date.now();
+          setAwmCooldown(awmTimeLeft > 0 ? Math.ceil(awmTimeLeft / 1000) : 0);
       } else {
-        setGrenadeCooldown(0);
+          setAwmCooldown(0); // Not holding AWM, no cooldown visible
       }
 
+      const grenadeTimeLeft = (player.lastGrenadeTime + GUNS.grenade.cooldown) - Date.now();
+      setGrenadeCooldown(grenadeTimeLeft > 0 ? Math.ceil(grenadeTimeLeft / 1000) : 0);
 
       const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
@@ -739,12 +739,15 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     },
     selectGun: (gun: GunChoice) => {
         if (playerStateRef.current) {
+            if (gun === 'awm') {
+                // If switching to AWM, start showing cooldown immediately if it's running
+                const awmTimeLeft = (lastFireTimeRef.current + GUNS.awm.cooldown) - Date.now();
+                setAwmCooldown(awmTimeLeft > 0 ? Math.ceil(awmTimeLeft / 1000) : 0);
+            }
             playerStateRef.current.gun = gun;
         }
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown };
 }
-
-    

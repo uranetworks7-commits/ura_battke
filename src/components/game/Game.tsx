@@ -18,7 +18,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -112,12 +112,17 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </div>
             <div
               className={cn(
-                'p-1 rounded-md cursor-pointer border-2 bg-white',
+                'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                 player.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
               onClick={() => handleGunSelect('awm')}
             >
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
+               {awmCooldown > 0 && (
+                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-lg">
+                        {awmCooldown}
+                    </div>
+                )}
             </div>
             <div
                 className={cn(
@@ -163,7 +168,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </div>
             <div
               className={cn(
-                'p-1 rounded-md border-2 bg-white',
+                'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                 opponent.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
               )}
             >
