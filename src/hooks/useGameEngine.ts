@@ -39,7 +39,7 @@ const HACKER_CODE_225 = '#225';
 const HACKER_CODE_226 = '#226';
 
 const WAITING_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const AFK_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+const AFK_TIMEOUT = 40 * 1000; // 40 seconds
 
 export enum GameStatus {
   WAITING,
