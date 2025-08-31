@@ -427,7 +427,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
-        goOffline(db);
     };
   }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner]);
   
