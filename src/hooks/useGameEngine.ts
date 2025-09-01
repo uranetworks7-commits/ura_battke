@@ -281,9 +281,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         planes.forEach(p => {
             ctx.save();
             const flip = p.vx > 0; // if vx is positive, it's moving right
-            ctx.translate(p.x + (flip ? 80 : 0), p.y); // 80 is plane width
-            if (flip) ctx.scale(-1, 1);
-            ctx.drawImage(planeImgRef.current!, 0, 0, 80, 40);
+            ctx.translate(p.x + (flip ? 120 : 0), p.y);
+            if (!flip) ctx.scale(-1, 1);
+            ctx.drawImage(planeImgRef.current!, 0, 0, 120, 60);
             ctx.restore();
         });
     }
@@ -300,8 +300,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(airstrikeMarkerRef.current, GROUND_Y);
-            ctx.lineTo(airstrikeMarkerRef.current, GROUND_Y + PLAYER_HEIGHT);
+            ctx.moveTo(airstrikeMarkerRef.current, 0);
+            ctx.lineTo(airstrikeMarkerRef.current, CANVAS_HEIGHT);
             ctx.stroke();
         }
     }
@@ -477,19 +477,16 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 const opponentJustThrewGrenade = opponentData.grenades?.length > (opponentUI.grenades?.length || 0);
                 if (opponentJustThrewGrenade && opponentData.grenades) {
                      const newGrenade = opponentData.grenades[opponentData.grenades.length - 1];
-                    // This is imperfect because we can't get the timing right, but we can play a sound.
-                    // A better way would be a dedicated "events" node in Firebase.
                     setTimeout(() => playSound('grenade_explode'), GRENADE_FUSE * (1000/60));
                 }
 
                 if (opponentData.airstrikeTarget && !opponentUI.airstrikeTarget) {
-                    // Opponent just called an airstrike
                     playSound('airstrike_alert');
-                    setTimeout(() => {
+                     setTimeout(() => {
                          const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
                          planesRef.current.push({
                             id: `plane-opp-${Date.now()}`,
-                            x: planeGoesLeft ? CANVAS_WIDTH : -80,
+                            x: planeGoesLeft ? CANVAS_WIDTH : -120,
                             y: 30,
                             vx: planeGoesLeft ? -3 : 3,
                             targetX: opponentData.airstrikeTarget,
@@ -706,22 +703,22 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 bombsRef.current.push({
                     id: `bomb-${p.id}-${i}`,
                     x: p.x + (Math.random() * 80 - 40), // drop around the plane
-                    y: p.y + 20,
+                    y: p.y + 30, // Drop from middle of plane
                     vy: 3, // Initial bomb fall speed
                 });
             }
         }
       });
-      planesRef.current = planesRef.current.filter(p => p.x > -100 && p.x < CANVAS_WIDTH + 100);
+      planesRef.current = planesRef.current.filter(p => p.x > -150 && p.x < CANVAS_WIDTH + 150);
 
       bombsRef.current.forEach(b => {
-          b.vy += GRAVITY / 2.5; // Bombs accelerate
+          b.vy += GRAVITY / 2; // Bombs accelerate
           b.y += b.vy;
-          if (b.y >= GROUND_Y + PLAYER_HEIGHT) {
-              handleExplosion({ x: b.x, y: b.y - 20, radius: GUNS.airstrike.blastRadius }, 'awm_fire');
+          if (b.y >= GROUND_Y + PLAYER_HEIGHT / 2) {
+              handleExplosion({ x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius }, 'awm_fire');
           }
       });
-      bombsRef.current = bombsRef.current.filter(b => b.y < GROUND_Y + PLAYER_HEIGHT);
+      bombsRef.current = bombsRef.current.filter(b => b.y < GROUND_Y + PLAYER_HEIGHT / 2);
 
 
       explosionsRef.current = explosionsRef.current.map(exp => ({ ...exp, life: exp.life - 1 })).filter(exp => exp.life > 0);
@@ -848,7 +845,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             const fireCount = p.isHacker ? 20 : 1;
             for(let i = 0; i < fireCount; i++) {
               bulletsRef.current.push({
-                  id: `${now}-${Math.random()}-${i}`.replace('.', ''),
+                  id: `${now}-${Math.random()}-${i}`.replace(/[.#$[\]]/g, ''),
                   x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : -8),
                   y: p.y + (PLAYER_HEIGHT / 2 - 10) + (Math.random() * 20 - 10), // slight vertical spread
                   dir: p.dir === 'right' ? 1 : -1,
@@ -872,7 +869,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
              const planeGoesLeft = p.x > CANVAS_WIDTH / 2;
              planesRef.current.push({
                 id: `plane-${p.id}-${Date.now()}`,
-                x: planeGoesLeft ? CANVAS_WIDTH : -80, // Start off-screen
+                x: planeGoesLeft ? CANVAS_WIDTH : -120, // Start off-screen
                 y: 30, // Fly at a height of 30px
                 vx: planeGoesLeft ? -3 : 3,
                 targetX: x,
