@@ -115,7 +115,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             <div className="flex items-end gap-2">
                 <div
                 className={cn(
-                    'p-1 rounded-md cursor-pointer border-2 bg-white',
+                    'p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                     player.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                 )}
                 onClick={() => handleGunSelect('ak')}
@@ -136,10 +136,10 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                         </div>
                     )}
                 </div>
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center gap-1">
                     <div
                         className={cn(
-                            'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                            'p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                             player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                         )}
                         onClick={() => handleGunSelect('grenade')}
@@ -151,10 +151,10 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                             </div>
                         )}
                     </div>
-                    <span className="text-xs font-mono">Grenade</span>
+                     <span className="text-xs font-mono">Grenade</span>
                 </div>
             </div>
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center gap-1">
                 <div
                     className={cn(
                         'p-1 rounded-md cursor-pointer border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
@@ -188,12 +188,15 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
           <div className="flex flex-col items-end gap-2 mt-2">
             <div className="flex items-end justify-end gap-2">
-                <div
-                  className={cn(
-                    'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
-                    opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-                  )}>
-                    <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
+                <div className="flex flex-col items-center gap-1">
+                  <div
+                    className={cn(
+                      'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                      opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                    )}>
+                      <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
+                  </div>
+                  <span className="text-xs font-mono">Grenade</span>
                 </div>
                  <div
                   className={cn(
@@ -205,21 +208,24 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 </div>
                 <div
                   className={cn(
-                    'p-1 rounded-md border-2 bg-white',
+                    'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                     opponent.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                   )}
                 >
                   <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
                 </div>
             </div>
-             <div
-                className={cn(
-                    'p-1 rounded-md border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
-                     (opponent.gun === 'airstrike' || opponent.airstrikeTarget) ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60',
-                    opponent.airstrikeUsed ? 'opacity-20' : ''
-                )}
-                >
-                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+             <div className="flex flex-col items-center gap-1">
+                <div
+                    className={cn(
+                        'p-1 rounded-md cursor-pointer border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
+                        (opponent.gun === 'airstrike' || opponent.airstrikeTarget) ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60',
+                        opponent.airstrikeUsed ? 'opacity-20 cursor-not-allowed' : ''
+                    )}
+                    >
+                    <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+                </div>
+                 <span className="text-xs font-mono">Airstrike</span>
             </div>
           </div>
           )}

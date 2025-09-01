@@ -594,7 +594,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
             if (dist < radius) {
                 const damageType = sound === 'awm_fire' ? 'airstrike' : 'grenade';
-                const falloff = 1 - (dist / radius);
                 const damage = Math.round(GUNS[damageType].damage * falloff);
                 
                 if (damage > 0) {
