@@ -80,6 +80,7 @@ interface PlayerState {
   lastGrenadeTime: number;
   airstrikeUsed: boolean;
   airstrikeTarget: number | null;
+  explosions?: Omit<Explosion, 'id' | 'life'>[];
 }
 
 interface OpponentState extends Omit<PlayerState, 'vy' | 'vx' | 'lastGrenadeTime'> {
@@ -382,8 +383,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   }, [canvasRef, gameStatus, opponentUI]);
   
-  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, sound: keyof typeof audioRefs.current, isOwner: boolean) => {
-    playSound(sound);
+  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, isOwner: boolean) => {
+    const soundType = explosion.radius > 100 ? 'grenade_explode' : 'awm_fire';
+    playSound(soundType);
     explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30, ownerId: explosion.ownerId }); // 0.5s explosion effect
 
     if (!isOwner) return; // Only the owner of the explosion calculates damage
@@ -399,7 +401,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     const damagePlayer = (p: PlayerState | OpponentState) => {
         const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
         if (dist < radius) {
-            const damageType = sound === 'awm_fire' ? 'airstrike' : 'grenade';
+            const damageType = radius > 100 ? 'grenade' : 'airstrike';
             const damage = Math.round(GUNS[damageType].damage * (1 - (dist / radius)));
             if (damage > 0) {
                  if (p.id === player?.id) {
@@ -418,11 +420,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     if (player) updates[`${sRoomCode}/${player.id}/hp`] = playerHp;
     if (opponent) updates[`${sRoomCode}/${opponent.id}/hp`] = opponentHp;
     
-    update(ref(db), updates);
+    if(Object.keys(updates).length > 0) {
+        update(ref(db), updates);
+    }
 
     if (player && opponent) {
-        if (playerHp <= 0) declareWinner({ name: opponent.name, username: opponent.username }, 'elimination');
-        else if (opponentHp <= 0) declareWinner({ name: player.name, username: player.username }, 'elimination');
+        if (playerHp <= 0 && opponentHp > 0) declareWinner({ name: opponent.name, username: opponent.username }, 'elimination');
+        else if (opponentHp <= 0 && playerHp > 0) declareWinner({ name: player.name, username: player.username }, 'elimination');
     }
   }, [sRoomCode, playSound, declareWinner]);
 
@@ -437,7 +441,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     grenadeImgRef.current = new Image();
     grenadeImgRef.current.src = 'https://i.postimg.cc/FRLXP1mf/1756586440631.png';
     planeImgRef.current = new Image();
-    planeImgRef.current.src = 'https://i.postimg.cc/VvCJZBFH/1756717841361.png';
+    planeImgRef.current.src = 'https://i.postimg.cc/wMdHdzrd/1756758625266.png';
     bombImgRef.current = new Image();
     bombImgRef.current.src = 'https://i.postimg.cc/QtXTD7xf/1756717866307.png';
 
@@ -529,16 +533,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = { id: opponentRole, ...opponentData };
             
             if (hadOpponent && myRole) {
-                const opponentGrenades = opponentData.grenades || [];
-                if (opponentGrenades.length < (previousOpponentData?.grenades?.length || 0)) {
-                    playSound('grenade_explode');
-                }
-
                 if (opponentData.explosions && opponentData.explosions.length > (previousOpponentData?.explosions?.length || 0)) {
                     const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
                     newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
+                        const soundType = exp.radius > 100 ? 'grenade_explode' : 'awm_fire';
+                        playSound(soundType);
                         explosionsRef.current.push({ ...exp, id: `exp-opp-${Date.now()}`, life: 30 });
-                        playSound(exp.radius > 100 ? 'grenade_explode' : 'awm_fire');
                     });
                 }
 
@@ -709,8 +709,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           g.fuse--;
           if (g.fuse <= 0) {
               const explosionData = { x: g.x, y: g.y, radius: GUNS.grenade.blastRadius, ownerId: g.ownerId };
-              handleExplosion(explosionData, 'grenade_explode', g.ownerId === player.id);
-              if (g.ownerId === player.id) {
+              const isOwner = g.ownerId === player.id;
+              handleExplosion(explosionData, isOwner);
+              if (isOwner) {
                  const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
                  update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
               }
@@ -725,9 +726,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             for (let i = 0; i < 4; i++) {
                 bombsRef.current.push({
                     id: `bomb-${p.id}-${i}`,
-                    x: p.x + (Math.random() * 80 - 40),
+                    x: p.x + (Math.random() * 80 - 40) + (p.vx * 5),
                     y: p.y + 30,
-                    vx: p.vx * 0.5 + (Math.random() - 0.5), // Inherit some plane velocity
+                    vx: p.vx * 0.8 + (Math.random() - 0.5), // Inherit most of plane velocity
                     vy: 3 + Math.random() * 2,
                     ownerId: p.ownerId,
                 });
@@ -742,8 +743,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           b.x += b.vx;
           if (b.y >= GROUND_Y + PLAYER_HEIGHT / 2) {
               const explosionData = { x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius, ownerId: b.ownerId };
-              handleExplosion(explosionData, 'awm_fire', b.ownerId === player.id);
-              if (b.ownerId === player.id) {
+              const isOwner = b.ownerId === player.id;
+              handleExplosion(explosionData, isOwner);
+              if (isOwner) {
                 const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
                 update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
               }
@@ -790,7 +792,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       }
 
       if (roleRef.current) {
-        const { id, vy, hp, ...playerData } = player;
+        const { id, vy, hp, explosions, ...playerData } = player;
         update(ref(db, `${sRoomCode}/${roleRef.current}`), {
           x: playerData.x,
           y: playerData.y,
@@ -844,7 +846,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             return; // Airstrike is triggered by setAirstrikeTarget
         }
 
-        const gunInfo = GUNS[p.gun];
+        const gunInfo = GUNS[p.gun as 'ak' | 'awm' | 'grenade'];
         if (p.gun === 'grenade') {
             if (!isThrowingGrenadeRef.current) return;
             if (now - (p.lastGrenadeTime || 0) < gunInfo.cooldown) return;
@@ -872,7 +874,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 ownerId: p.id
             });
         } else { // ak or awm
-            playSound(`${p.gun}_fire`);
+            playSound(`${p.gun}_fire` as 'ak_fire' | 'awm_fire');
             const fireCount = p.isHacker ? 20 : 1;
             for(let i = 0; i < fireCount; i++) {
               bulletsRef.current.push({
