@@ -576,12 +576,25 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             }
             lastOpponentBulletCount.current = opponentBullets.length;
 
+            const opponentGrenades = opponentData.grenades || [];
+            if(opponentGrenades.length > lastOpponentGrenadeCount.current) {
+                const newGrenades = opponentGrenades.slice(lastOpponentGrenadeCount.current);
+                newGrenades.forEach((g: Grenade) => {
+                    const existingGrenade = grenadesRef.current.find(localG => localG.id === g.id);
+                    if (!existingGrenade) {
+                        grenadesRef.current.push(g);
+                    }
+                });
+            }
+            lastOpponentGrenadeCount.current = opponentGrenades.length;
+
+
             setOpponentUI({ 
                 name: opponentData.name, 
                 hp: opponentData.hp, 
                 gun: opponentData.gun,
                 bullets: opponentBullets,
-                grenades: opponentData.grenades || [],
+                grenades: opponentGrenades,
                 airstrikesLeft: opponentData.airstrikesLeft,
                 airstrikeTarget: opponentData.airstrikeTarget || null,
             });
@@ -809,7 +822,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           dir: playerData.dir,
           gun: playerData.gun,
           bullets: bulletsRef.current,
-          grenades: grenadesRef.current,
+          grenades: grenadesRef.current.filter(g => g.ownerId === player.id), // Only send my grenades
           lastGrenadeTime: playerData.lastGrenadeTime,
           lastAirstrikeTime: playerData.lastAirstrikeTime,
           airstrikesLeft: playerData.airstrikesLeft,
