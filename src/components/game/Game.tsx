@@ -18,7 +18,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeUsed, isTargetingAirstrike } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, isTargetingAirstrike } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -96,6 +96,8 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     };
   }, [actions]);
 
+  const gunIconClass = "p-1 rounded-md cursor-pointer border-2 bg-white w-[40px] h-[28px] flex items-center justify-center";
+
   return (
     <div className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 gap-4 w-full h-full max-w-7xl mx-auto">
       {/* Top Bar: Players Info & Gun Selection */}
@@ -114,7 +116,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             <div className="flex items-end gap-2">
                 <div
                 className={cn(
-                    'p-1 rounded-md cursor-pointer border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                    gunIconClass,
                     player.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                 )}
                 onClick={() => handleGunSelect('ak')}
@@ -123,7 +125,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 </div>
                 <div
                   className={cn(
-                    'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                    gunIconClass, 'relative',
                     player.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                   )}
                   onClick={() => handleGunSelect('awm')}
@@ -137,7 +139,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 </div>
                 <div
                     className={cn(
-                        'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                        gunIconClass, 'relative',
                         player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                     )}
                     onClick={() => handleGunSelect('grenade')}
@@ -152,13 +154,16 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </div>
             <div
                 className={cn(
-                    'p-1 rounded-md cursor-pointer border-2 bg-white h-[28px] w-[40px] flex items-center justify-center',
+                    gunIconClass, 'relative',
                     isTargetingAirstrike ? 'border-red-500 animate-pulse' : (player.gun === 'airstrike' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'),
-                    airstrikeUsed ? 'opacity-20 cursor-not-allowed' : ''
+                    player.airstrikesLeft === 0 ? 'opacity-20 cursor-not-allowed' : ''
                 )}
-                onClick={() => !airstrikeUsed && handleGunSelect('airstrike')}
+                onClick={() => player.airstrikesLeft > 0 && handleGunSelect('airstrike')}
                 >
-                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/wMdHdzrd/1756758625266.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                {player.airstrikesLeft > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">{player.airstrikesLeft}</span>
+                )}
             </div>
           </div>
         </div>
@@ -181,16 +186,16 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
           <div className="flex flex-col items-end gap-2 mt-2">
             <div className="flex items-end justify-end gap-2">
-                  <div
+                <div
                     className={cn(
-                      'relative p-1 rounded-md border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                      gunIconClass, 'relative',
                       opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                     )}>
                       <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={24} height={24} className="object-contain" />
-                  </div>
-                 <div
+                </div>
+                <div
                   className={cn(
-                    'p-1 rounded-md border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                    gunIconClass,
                     opponent.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                   )}
                 >
@@ -198,7 +203,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 </div>
                 <div
                   className={cn(
-                    'p-1 rounded-md border-2 bg-white w-[40px] h-[28px] flex items-center justify-center',
+                    gunIconClass,
                     opponent.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                   )}
                 >
@@ -207,12 +212,15 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             </div>
              <div
                 className={cn(
-                    'p-1 rounded-md border-2 bg-white h-[28px] w-[40px] flex items-center justify-center mt-2',
+                    gunIconClass, 'relative',
                     (opponent.gun === 'airstrike' || opponent.airstrikeTarget) ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60',
-                    opponent.airstrikeUsed ? 'opacity-20' : ''
+                    opponent.airstrikesLeft === 0 ? 'opacity-20' : ''
                 )}
                 >
-                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/wMdHdzrd/1756758625266.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                 {opponent.airstrikesLeft > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">{opponent.airstrikesLeft}</span>
+                )}
             </div>
           </div>
           )}
@@ -317,5 +325,3 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     </div>
   );
 }
-
-    

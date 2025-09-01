@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { ref, onValue, set, update, onDisconnect, goOffline, goOnline, off, serverTimestamp, runTransaction } from 'firebase/database';
+import { ref, onValue, set, update, goOffline, goOnline, off, serverTimestamp, runTransaction } from 'firebase/database';
 import { useToast } from './use-toast';
 
 const CANVAS_WIDTH = 800;
@@ -44,7 +44,7 @@ const HACKER_CODE_225 = '#225';
 const HACKER_CODE_226 = '#226';
 
 const WAITING_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const AFK_TIMEOUT = 40 * 1000; // 40 seconds
+const AFK_TIMEOUT = 45 * 1000; // 45 seconds
 
 export enum GameStatus {
   WAITING,
@@ -78,7 +78,7 @@ interface PlayerState {
   lastUpdate: any;
   gun: GunChoice;
   lastGrenadeTime: number;
-  airstrikeUsed: boolean;
+  airstrikesLeft: number;
   airstrikeTarget: number | null;
   explosions?: Omit<Explosion, 'id' | 'life'>[];
 }
@@ -174,8 +174,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [gameStatus, setGameStatus] = useState<GameStatus>(GameStatus.WAITING);
   const [winner, setWinner] = useState<string | null>(null);
   const [cheaterDetected, setCheaterDetected] = useState(false);
-  const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice, airstrikeUsed: false });
-  const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice, bullets: [], grenades: [], airstrikeUsed: false, airstrikeTarget: null as number | null });
+  const [playerUI, setPlayerUI] = useState({ name: playerName, hp: INITIAL_HP, gun: 'ak' as GunChoice, airstrikesLeft: 3 });
+  const [opponentUI, setOpponentUI] = useState({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak' as GunChoice, bullets: [], grenades: [], airstrikesLeft: 3, airstrikeTarget: null as number | null });
   const [isMuted, setIsMuted] = useState(false);
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   const [awmCooldown, setAwmCooldown] = useState(0);
@@ -398,14 +398,18 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     let playerHp = player?.hp ?? INITIAL_HP;
     let opponentHp = opponent?.hp ?? INITIAL_HP;
 
-    const damagePlayer = (p: PlayerState | OpponentState) => {
+    const calculateDamage = (p: PlayerState | OpponentState) => {
         const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
         if (dist < radius) {
             const damageType = radius > 100 ? 'grenade' : 'airstrike';
             const damage = Math.round(GUNS[damageType].damage * (1 - (dist / radius)));
             if (damage > 0) {
                  if (p.id === player?.id) {
-                     playerHp = Math.max(0, playerHp - damage);
+                    if(player.isHacker && player.hackerType === '226') {
+                        // Hacker 226 takes no damage
+                    } else {
+                        playerHp = Math.max(0, playerHp - damage);
+                    }
                  } else {
                      opponentHp = Math.max(0, opponentHp - damage);
                      damageIndicatorsRef.current.push({ id: `dmg-${Date.now()}`, amount: damage, x: p.x + PLAYER_WIDTH / 2, y: p.y - 10, life: 60 });
@@ -414,8 +418,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         }
     };
     
-    if (player) damagePlayer(player);
-    if (opponent) damagePlayer(opponent);
+    if (player) calculateDamage(player);
+    if (opponent) calculateDamage(opponent);
     
     if (player) updates[`${sRoomCode}/${player.id}/hp`] = playerHp;
     if (opponent) updates[`${sRoomCode}/${opponent.id}/hp`] = opponentHp;
@@ -475,7 +479,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, airstrikeUsed: false, airstrikeTarget: null, explosions: [] };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, airstrikesLeft: 3, airstrikeTarget: null, explosions: [] };
             
             const p1 = roomData?.player1;
             const p2 = roomData?.player2;
@@ -511,7 +515,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             }
 
             const myRef = ref(db, `${sRoomCode}/${assignedRole}`);
-            onDisconnect(myRef).remove();
             const { id, vy, vx, ...playerData } = playerStateRef.current || {};
             set(myRef, playerData);
         }
@@ -523,9 +526,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (myData && playerStateRef.current) {
             playerStateRef.current.hp = myData.hp;
             playerStateRef.current.lastGrenadeTime = myData.lastGrenadeTime || 0;
-            playerStateRef.current.airstrikeUsed = myData.airstrikeUsed || false;
+            playerStateRef.current.airstrikesLeft = myData.airstrikesLeft;
         }
-        setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak', airstrikeUsed: playerStateRef.current?.airstrikeUsed || false });
+        setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak', airstrikesLeft: playerStateRef.current?.airstrikesLeft ?? 3 });
         
         if (opponentData) {
             const hadOpponent = !!opponentStateRef.current;
@@ -575,12 +578,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 gun: opponentData.gun,
                 bullets: opponentBullets,
                 grenades: opponentData.grenades || [],
-                airstrikeUsed: opponentData.airstrikeUsed || false,
+                airstrikesLeft: opponentData.airstrikesLeft,
                 airstrikeTarget: opponentData.airstrikeTarget || null,
             });
         } else {
             opponentStateRef.current = null;
-            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak', bullets: [], grenades: [], airstrikeUsed: false, airstrikeTarget: null });
+            setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak', bullets: [], grenades: [], airstrikesLeft: 3, airstrikeTarget: null });
             lastOpponentBulletCount.current = 0;
             lastOpponentGrenadeCount.current = 0;
         }
@@ -801,7 +804,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           bullets: bulletsRef.current,
           grenades: grenadesRef.current,
           lastGrenadeTime: playerData.lastGrenadeTime,
-          airstrikeUsed: playerData.airstrikeUsed,
+          airstrikesLeft: playerData.airstrikesLeft,
           airstrikeTarget: playerData.airstrikeTarget,
           lastUpdate: serverTimestamp()
         });
@@ -889,9 +892,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     },
     setAirstrikeTarget: (x: number) => {
         const p = playerStateRef.current;
-        if (!p || p.airstrikeUsed || gameStatus !== GameStatus.PLAYING) return;
+        if (!p || p.airstrikesLeft <= 0 || gameStatus !== GameStatus.PLAYING) return;
         
-        p.airstrikeUsed = true;
+        p.airstrikesLeft -= 1;
         p.airstrikeTarget = x;
         airstrikeMarkerRef.current = x;
         setIsTargetingAirstrike(false);
@@ -935,7 +938,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     selectGun: (gun: GunChoice) => {
         if (playerStateRef.current) {
             if (gun === 'airstrike') {
-                if (playerStateRef.current.airstrikeUsed) return;
+                if (playerStateRef.current.airstrikesLeft <= 0) return;
                 setIsTargetingAirstrike(true);
             } else {
                 setIsTargetingAirstrike(false);
@@ -951,5 +954,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeUsed: playerUI.airstrikeUsed, isTargetingAirstrike };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, isTargetingAirstrike };
 }
