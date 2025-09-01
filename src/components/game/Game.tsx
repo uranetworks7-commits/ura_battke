@@ -136,39 +136,42 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                         </div>
                     )}
                 </div>
-                <div
-                    className={cn(
-                        'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
-                        player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-                    )}
-                    onClick={() => handleGunSelect('grenade')}
-                >
-                    <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
-                    {grenadeCooldown > 0 && (
-                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-lg">
-                            {grenadeCooldown}
-                        </div>
-                    )}
+                <div className="flex flex-col items-center">
+                    <div
+                        className={cn(
+                            'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                            player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                        )}
+                        onClick={() => handleGunSelect('grenade')}
+                    >
+                        <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
+                        {grenadeCooldown > 0 && (
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-lg">
+                                {grenadeCooldown}
+                            </div>
+                        )}
+                    </div>
+                    <span className="text-xs font-mono">Grenade</span>
                 </div>
             </div>
-            <div
-                className={cn(
-                    'p-1 rounded-md cursor-pointer border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
-                    isTargetingAirstrike ? 'border-red-500 animate-pulse' : (player.gun === 'airstrike' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'),
-                    airstrikeUsed ? 'opacity-20 cursor-not-allowed' : ''
-                )}
-                onClick={() => !airstrikeUsed && handleGunSelect('airstrike')}
-                >
-                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+            <div className="flex flex-col items-center">
+                <div
+                    className={cn(
+                        'p-1 rounded-md cursor-pointer border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
+                        isTargetingAirstrike ? 'border-red-500 animate-pulse' : (player.gun === 'airstrike' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'),
+                        airstrikeUsed ? 'opacity-20 cursor-not-allowed' : ''
+                    )}
+                    onClick={() => !airstrikeUsed && handleGunSelect('airstrike')}
+                    >
+                    <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+                </div>
+                 <span className="text-xs font-mono">Airstrike</span>
             </div>
           </div>
         </div>
 
         <div className="flex-shrink-0 text-center flex flex-col items-center gap-2 pt-2">
           <p className="font-headline text-2xl text-accent">VS</p>
-           {isTargetingAirstrike && (
-            <div className="font-bold text-red-500 animate-pulse text-sm">MARK AIRSTRIKE LOCATION</div>
-          )}
         </div>
 
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
@@ -240,6 +243,11 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             <p className="text-2xl font-headline text-white animate-pulse">Waiting for opponent...</p>
           </div>
         )}
+         {isTargetingAirstrike && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg pointer-events-none">
+              <p className="font-bold text-red-500 animate-pulse text-2xl tracking-widest">MARK AIRSTRIKE LOCATION</p>
+            </div>
+          )}
       </div>
 
       {/* Bottom Controls */}
