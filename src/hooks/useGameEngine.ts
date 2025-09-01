@@ -200,13 +200,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     });
   }, []);
 
-  const playSound = (sound: keyof typeof audioRefs.current) => {
+  const playSound = useCallback((sound: keyof typeof audioRefs.current) => {
     const audio = audioRefs.current[sound];
     if(audio && !isMuted) {
       audio.currentTime = 0;
       audio.play().catch(e => console.log('Sound play interrupted'));
     }
-  };
+  }, [isMuted]);
 
   useEffect(() => {
      Object.values(audioRefs.current).forEach(audio => {
@@ -372,8 +372,56 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     drawTrajectory();
     drawDamageIndicators();
 
-  }, [canvasRef, gameStatus, declareWinner, opponentUI]);
+  }, [canvasRef, gameStatus, opponentUI]);
   
+  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, sound: keyof typeof audioRefs.current) => {
+    playSound(sound);
+    explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30 }); // 0.5s explosion effect
+
+    const { x, y, radius } = explosion;
+    const allPlayers: (PlayerState | OpponentState | null)[] = [playerStateRef.current, opponentStateRef.current];
+    
+    allPlayers.forEach(p => {
+        if (!p) return;
+        const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
+        const falloff = 1 - (dist / radius);
+
+        if (dist < radius) {
+            const damageType = sound === 'awm_fire' ? 'airstrike' : 'grenade';
+            const damage = Math.round(GUNS[damageType].damage * falloff);
+            
+            if (damage > 0) {
+                if (isNaN(p.hp)) return;
+                const newHp = Math.max(0, p.hp - damage);
+                
+                const role = p.id === playerStateRef.current?.id ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
+
+                if (p.id !== playerStateRef.current?.id) {
+                    damageIndicatorsRef.current.push({
+                        id: `dmg-${Date.now()}`,
+                        amount: damage,
+                        x: p.x + PLAYER_WIDTH / 2,
+                        y: p.y - 10,
+                        life: 60
+                    });
+                } else {
+                   if (playerStateRef.current) playerStateRef.current.hp = newHp;
+                }
+                
+                if (role) {
+                    update(ref(db, `${sRoomCode}/${role}`), { hp: newHp });
+                }
+                
+                if (newHp <= 0 && opponentStateRef.current && p.id === opponentStateRef.current.id) {
+                    declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
+                } else if (newHp <= 0 && p.id === playerStateRef.current?.id && opponentStateRef.current) {
+                    declareWinner({ name: opponentStateRef.current.name, username: opponentStateRef.current.username }, 'elimination');
+                }
+            }
+        }
+    });
+}, [sRoomCode, playSound, declareWinner]);
+
   useEffect(() => {
     goOnline(db);
     bgImgRef.current = new Image();
@@ -393,6 +441,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     const handleRoomValue = (snapshot: any) => {
         const roomData = snapshot.val();
         if (!roomData && gameStatus !== GameStatus.WAITING) return;
+        const myRole = roleRef.current;
 
         if (roomData?.winner) {
             if (winner) return;
@@ -403,7 +452,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             return;
         }
 
-        if (!roleRef.current) {
+        if (!myRole) {
             let isHacker = false;
             let hackerType: '' | '225' | '226' = '';
             let displayName = playerName;
@@ -423,42 +472,44 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             const p1 = roomData?.player1;
             const p2 = roomData?.player2;
 
+            let assignedRole: 'player1' | 'player2' | null = null;
             if (p1 && p1.name === displayName && p1.username === playerUsername) {
-                roleRef.current = 'player1';
+                assignedRole = 'player1';
             } else if (p2 && p2.name === displayName && p2.username === playerUsername) {
-                roleRef.current = 'player2';
+                assignedRole = 'player2';
             } else if (!p1) {
-                roleRef.current = 'player1';
+                assignedRole = 'player1';
             } else if (!p2) {
-                roleRef.current = 'player2';
+                assignedRole = 'player2';
             } else {
                  console.error("Room is full or player data mismatch.");
                  return;
             }
+            roleRef.current = assignedRole;
             
-            const existingData = roomData?.[roleRef.current];
+            const existingData = roomData?.[assignedRole];
 
             if (existingData) { // Reconnecting
                  playerStateRef.current = { 
                      ...existingData, 
-                     id: roleRef.current,
+                     id: assignedRole,
                      vx: 0, 
                      vy: 0,
                 };
             } else { // New player
-                 const startingX = roleRef.current === 'player1' ? 100 : CANVAS_WIDTH - 100 - PLAYER_WIDTH;
-                 const startingDir = roleRef.current === 'player1' ? 'right' : 'left';
-                 playerStateRef.current = { ...basePlayer, id: roleRef.current, x: startingX, y: GROUND_Y, vx: 0, vy: 0, dir: startingDir };
+                 const startingX = assignedRole === 'player1' ? 100 : CANVAS_WIDTH - 100 - PLAYER_WIDTH;
+                 const startingDir = assignedRole === 'player1' ? 'right' : 'left';
+                 playerStateRef.current = { ...basePlayer, id: assignedRole, x: startingX, y: GROUND_Y, vx: 0, vy: 0, dir: startingDir };
             }
 
-            const myRef = ref(db, `${sRoomCode}/${roleRef.current}`);
+            const myRef = ref(db, `${sRoomCode}/${assignedRole}`);
             onDisconnect(myRef).remove();
             const { id, vy, vx, ...playerData } = playerStateRef.current || {};
             set(myRef, playerData);
         }
 
-        const opponentRole = roleRef.current === 'player1' ? 'player2' : 'player1';
-        const myData = roomData?.[roleRef.current!];
+        const opponentRole = myRole === 'player1' ? 'player2' : 'player1';
+        const myData = roomData?.[myRole!];
         const opponentData = roomData?.[opponentRole];
 
         if (myData && playerStateRef.current) {
@@ -470,17 +521,16 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         
         if (opponentData) {
             const hadOpponent = !!opponentStateRef.current;
+            const previousOpponentData = opponentStateRef.current;
             opponentStateRef.current = { id: opponentRole, ...opponentData };
             
-            // Check for opponent's new actions
-            if (hadOpponent) {
-                const opponentJustThrewGrenade = opponentData.grenades?.length > (opponentUI.grenades?.length || 0);
+            if (hadOpponent && myRole) {
+                const opponentJustThrewGrenade = opponentData.grenades?.length > (previousOpponentData?.grenades?.length || 0);
                 if (opponentJustThrewGrenade && opponentData.grenades) {
-                     const newGrenade = opponentData.grenades[opponentData.grenades.length - 1];
-                    setTimeout(() => playSound('grenade_explode'), GRENADE_FUSE * (1000/60));
+                     setTimeout(() => playSound('grenade_explode'), GRENADE_FUSE * (1000/60));
                 }
 
-                if (opponentData.airstrikeTarget && !opponentUI.airstrikeTarget) {
+                if (opponentData.airstrikeTarget && !previousOpponentData?.airstrikeTarget) {
                     playSound('airstrike_alert');
                      setTimeout(() => {
                          const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
@@ -532,7 +582,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
     };
-  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner]);
+  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
@@ -581,52 +631,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
     };
   }, [gameStatus, declareWinner, winner]);
-
-    const handleExplosion = (explosion: Omit<Explosion, 'id' | 'life'>, sound: keyof typeof audioRefs.current) => {
-        playSound(sound);
-        explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30 }); // 0.5s explosion effect
-
-        const { x, y, radius } = explosion;
-        const allPlayers: (PlayerState | OpponentState | null)[] = [playerStateRef.current, opponentStateRef.current];
-        
-        allPlayers.forEach(p => {
-            if (!p) return;
-            const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
-            if (dist < radius) {
-                const damageType = sound === 'awm_fire' ? 'airstrike' : 'grenade';
-                const damage = Math.round(GUNS[damageType].damage * falloff);
-                
-                if (damage > 0) {
-                    if (isNaN(p.hp)) return;
-                    const newHp = Math.max(0, p.hp - damage);
-                    
-                    const role = p.id === playerStateRef.current?.id ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
-
-                    if (p.id !== playerStateRef.current?.id) {
-                        damageIndicatorsRef.current.push({
-                            id: `dmg-${Date.now()}`,
-                            amount: damage,
-                            x: p.x + PLAYER_WIDTH / 2,
-                            y: p.y - 10,
-                            life: 60
-                        });
-                    } else {
-                       if (playerStateRef.current) playerStateRef.current.hp = newHp;
-                    }
-                    
-                    if (role) {
-                        update(ref(db, `${sRoomCode}/${role}`), { hp: newHp });
-                    }
-                    
-                    if (newHp <= 0 && opponentStateRef.current && p.id === opponentStateRef.current.id) {
-                        declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
-                    } else if (newHp <= 0 && p.id === playerStateRef.current?.id && opponentStateRef.current) {
-                        declareWinner({ name: opponentStateRef.current.name, username: opponentStateRef.current.username }, 'elimination');
-                    }
-                }
-            }
-        });
-    };
 
   useEffect(() => {
     let animationFrameId: number;
@@ -779,7 +783,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
     animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameStatus, draw, sRoomCode, declareWinner]);
+  }, [gameStatus, draw, sRoomCode, declareWinner, handleExplosion]);
   
   const actions = {
     startMoveLeft: () => { moveState.current.left = true; if(playerStateRef.current) playerStateRef.current.dir = 'left'; },
@@ -865,16 +869,18 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
         setTimeout(() => {
             airstrikeMarkerRef.current = null;
-             const planeGoesLeft = p.x > CANVAS_WIDTH / 2;
-             planesRef.current.push({
-                id: `plane-${p.id}-${Date.now()}`,
-                x: planeGoesLeft ? CANVAS_WIDTH : -120, // Start off-screen
-                y: 30, // Fly at a height of 30px
-                vx: planeGoesLeft ? -3 : 3,
-                targetX: x,
-                bombsDropped: false,
-                ownerId: p.id,
-            });
+            if (p.id !== opponentStateRef.current?.id) { // Prevent duplicate local plane
+                const planeGoesLeft = p.x > CANVAS_WIDTH / 2;
+                planesRef.current.push({
+                   id: `plane-${p.id}-${Date.now()}`,
+                   x: planeGoesLeft ? CANVAS_WIDTH : -120, // Start off-screen
+                   y: 30, // Fly at a height of 30px
+                   vx: planeGoesLeft ? -3 : 3,
+                   targetX: x,
+                   bombsDropped: false,
+                   ownerId: p.id,
+               });
+            }
         }, AIRSTRIKE_DELAY);
     },
     reportOpponent: () => {
