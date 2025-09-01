@@ -37,6 +37,7 @@ const GUNS = {
   airstrike: {
       damage: 185, // per bomb
       blastRadius: 80,
+      cooldown: 15000, // 15 seconds
   }
 };
 
@@ -78,15 +79,17 @@ interface PlayerState {
   lastUpdate: any;
   gun: GunChoice;
   lastGrenadeTime: number;
+  lastAirstrikeTime: number;
   airstrikesLeft: number;
   airstrikeTarget: number | null;
   explosions?: Omit<Explosion, 'id' | 'life'>[];
 }
 
-interface OpponentState extends Omit<PlayerState, 'vy' | 'vx' | 'lastGrenadeTime'> {
+interface OpponentState extends Omit<PlayerState, 'vy' | 'vx' | 'lastGrenadeTime' | 'lastAirstrikeTime'> {
     bullets?: Bullet[];
     grenades?: Grenade[];
     lastGrenadeTime?: number;
+    lastAirstrikeTime?: number;
     explosions?: Omit<Explosion, 'id' | 'life'>[];
 }
 
@@ -179,6 +182,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const [isMuted, setIsMuted] = useState(false);
   const [grenadeCooldown, setGrenadeCooldown] = useState(0);
   const [awmCooldown, setAwmCooldown] = useState(0);
+  const [airstrikeCooldown, setAirstrikeCooldown] = useState(0);
   const [isTargetingAirstrike, setIsTargetingAirstrike] = useState(false);
   
   const bgImgRef = useRef<HTMLImageElement | null>(null);
@@ -402,7 +406,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
         if (dist < radius) {
             const damageType = radius > 100 ? 'grenade' : 'airstrike';
-            const damage = Math.round(GUNS[damageType].damage * (1 - (dist / radius)));
+            const baseDamage = GUNS[damageType].damage;
+            const damage = Math.round(baseDamage * (1 - (dist / radius)));
             if (damage > 0) {
                  if (p.id === player?.id) {
                     if(player.isHacker && player.hackerType === '226') {
@@ -418,11 +423,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         }
     };
     
-    if (player) calculateDamage(player);
-    if (opponent) calculateDamage(opponent);
+    if (player && player.id !== ownerId) calculateDamage(player);
+    if (opponent && opponent.id !== ownerId) calculateDamage(opponent);
     
-    if (player) updates[`${sRoomCode}/${player.id}/hp`] = playerHp;
-    if (opponent) updates[`${sRoomCode}/${opponent.id}/hp`] = opponentHp;
+    if (player && player.hp !== playerHp) updates[`${sRoomCode}/${player.id}/hp`] = playerHp;
+    if (opponent && opponent.hp !== opponentHp) updates[`${sRoomCode}/${opponent.id}/hp`] = opponentHp;
     
     if(Object.keys(updates).length > 0) {
         update(ref(db), updates);
@@ -479,7 +484,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, airstrikesLeft: 3, airstrikeTarget: null, explosions: [] };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, lastAirstrikeTime: 0, airstrikesLeft: 3, airstrikeTarget: null, explosions: [] };
             
             const p1 = roomData?.player1;
             const p2 = roomData?.player2;
@@ -526,6 +531,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (myData && playerStateRef.current) {
             playerStateRef.current.hp = myData.hp;
             playerStateRef.current.lastGrenadeTime = myData.lastGrenadeTime || 0;
+            playerStateRef.current.lastAirstrikeTime = myData.lastAirstrikeTime || 0;
             playerStateRef.current.airstrikesLeft = myData.airstrikesLeft;
         }
         setPlayerUI({ name: playerStateRef.current?.name || playerName, hp: playerStateRef.current?.hp || INITIAL_HP, gun: playerStateRef.current?.gun || 'ak', airstrikesLeft: playerStateRef.current?.airstrikesLeft ?? 3 });
@@ -539,12 +545,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 if (opponentData.explosions && opponentData.explosions.length > (previousOpponentData?.explosions?.length || 0)) {
                     const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
                     newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
-                        const soundType = exp.radius > 100 ? 'grenade_explode' : 'awm_fire';
-                        playSound(soundType);
-                        explosionsRef.current.push({ ...exp, id: `exp-opp-${Date.now()}`, life: 30 });
+                        const isOwner = exp.ownerId === myRole;
+                        handleExplosion(exp, isOwner);
                     });
                 }
-
 
                 if (opponentData.airstrikeTarget && !previousOpponentData?.airstrikeTarget) {
                     if (planesRef.current.every(p => p.ownerId !== opponentRole)) {
@@ -692,6 +696,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       const grenadeTimeLeft = (player.lastGrenadeTime + GUNS.grenade.cooldown) - Date.now();
       setGrenadeCooldown(grenadeTimeLeft > 0 ? Math.ceil(grenadeTimeLeft / 1000) : 0);
 
+      const airstrikeTimeLeft = (player.lastAirstrikeTime + GUNS.airstrike.cooldown) - Date.now();
+      setAirstrikeCooldown(airstrikeTimeLeft > 0 ? Math.ceil(airstrikeTimeLeft / 1000) : 0);
+
       const BULLET_SPEED = 10;
       bulletsRef.current = bulletsRef.current.map(b => ({...b, x: b.x + b.dir * BULLET_SPEED})).filter(b => b.x > 0 && b.x < CANVAS_WIDTH);
       
@@ -804,6 +811,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           bullets: bulletsRef.current,
           grenades: grenadesRef.current,
           lastGrenadeTime: playerData.lastGrenadeTime,
+          lastAirstrikeTime: playerData.lastAirstrikeTime,
           airstrikesLeft: playerData.airstrikesLeft,
           airstrikeTarget: playerData.airstrikeTarget,
           lastUpdate: serverTimestamp()
@@ -894,6 +902,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         const p = playerStateRef.current;
         if (!p || p.airstrikesLeft <= 0 || gameStatus !== GameStatus.PLAYING) return;
         
+        const now = Date.now();
+        if (now - (p.lastAirstrikeTime || 0) < GUNS.airstrike.cooldown) return;
+        
+        p.lastAirstrikeTime = now;
         p.airstrikesLeft -= 1;
         p.airstrikeTarget = x;
         airstrikeMarkerRef.current = x;
@@ -937,8 +949,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     },
     selectGun: (gun: GunChoice) => {
         if (playerStateRef.current) {
+             const p = playerStateRef.current;
             if (gun === 'airstrike') {
-                if (playerStateRef.current.airstrikesLeft <= 0) return;
+                if (p.airstrikesLeft <= 0) return;
+                const now = Date.now();
+                if (now - (p.lastAirstrikeTime || 0) < GUNS.airstrike.cooldown) return;
                 setIsTargetingAirstrike(true);
             } else {
                 setIsTargetingAirstrike(false);
@@ -949,10 +964,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 const awmTimeLeft = (lastFireTimeRef.current + GUNS.awm.cooldown) - Date.now();
                 setAwmCooldown(awmTimeLeft > 0 ? Math.ceil(awmTimeLeft / 1000) : 0);
             }
-            playerStateRef.current.gun = gun;
+            p.gun = gun;
         }
     }
   };
 
-  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, isTargetingAirstrike };
+  return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeCooldown, isTargetingAirstrike };
 }

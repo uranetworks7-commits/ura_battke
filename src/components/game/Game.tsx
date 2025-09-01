@@ -18,7 +18,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, isTargetingAirstrike } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeCooldown, isTargetingAirstrike } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -156,13 +156,18 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 className={cn(
                     gunIconClass, 'relative',
                     isTargetingAirstrike ? 'border-red-500 animate-pulse' : (player.gun === 'airstrike' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'),
-                    player.airstrikesLeft === 0 ? 'opacity-20 cursor-not-allowed' : ''
+                    player.airstrikesLeft === 0 && airstrikeCooldown === 0 ? 'opacity-20 cursor-not-allowed' : ''
                 )}
-                onClick={() => player.airstrikesLeft > 0 && handleGunSelect('airstrike')}
+                onClick={() => player.airstrikesLeft > 0 && airstrikeCooldown === 0 && handleGunSelect('airstrike')}
                 >
-                <Image src="https://i.postimg.cc/wMdHdzrd/1756758625266.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={28} height={28} className="object-contain" />
                 {player.airstrikesLeft > 0 && (
                     <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">{player.airstrikesLeft}</span>
+                )}
+                {airstrikeCooldown > 0 && (
+                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center font-bold text-white text-base">
+                        {airstrikeCooldown}
+                    </div>
                 )}
             </div>
           </div>
@@ -217,7 +222,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                     opponent.airstrikesLeft === 0 ? 'opacity-20' : ''
                 )}
                 >
-                <Image src="https://i.postimg.cc/wMdHdzrd/1756758625266.png" alt="Airstrike" width={28} height={28} className="object-contain" />
+                <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={28} height={28} className="object-contain" />
                  {opponent.airstrikesLeft > 0 && (
                     <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">{opponent.airstrikesLeft}</span>
                 )}
