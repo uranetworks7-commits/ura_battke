@@ -166,6 +166,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const airstrikeMarkerRef = useRef<number | null>(null);
   const lastOpponentBulletCount = useRef(0);
   const lastOpponentGrenadeCount = useRef(0);
+  const processedOpponentExplosions = useRef(new Set<string>());
+  const lastProcessedOpponentAirstrikeTime = useRef(0);
   const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
   const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -377,7 +379,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     drawBullets(bulletsRef.current);
     drawBullets(opponentUI.bullets);
     drawGrenades(grenadesRef.current);
-    drawGrenades(opponentUI.grenades);
     drawPlanes(planesRef.current);
     drawBombs(bombsRef.current);
     drawAirstrikeMarker();
@@ -387,12 +388,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   }, [canvasRef, gameStatus, opponentUI]);
   
-  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, isOwner: boolean) => {
+  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>) => {
     const soundType = explosion.radius > 100 ? 'grenade_explode' : 'awm_fire';
     playSound(soundType);
     explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30, ownerId: explosion.ownerId }); // 0.5s explosion effect
 
-    if (!isOwner) return; // Only the owner of the explosion calculates damage
+    // Only the owner of the explosion calculates damage
+    if (explosion.ownerId !== roleRef.current) return;
 
     const { x, y, radius, ownerId } = explosion;
     const player = playerStateRef.current;
@@ -538,34 +540,37 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         
         if (opponentData) {
             const hadOpponent = !!opponentStateRef.current;
-            const previousOpponentData = opponentStateRef.current;
             opponentStateRef.current = { id: opponentRole, ...opponentData };
             
             if (hadOpponent && myRole) {
-                if (opponentData.explosions && opponentData.explosions.length > (previousOpponentData?.explosions?.length || 0)) {
-                    const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
-                    newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
-                        const isOwner = exp.ownerId === myRole;
-                        handleExplosion(exp, isOwner);
+                // Sync Opponent Explosions
+                if (opponentData.explosions) {
+                    const opponentExplosionArray = Array.isArray(opponentData.explosions) ? opponentData.explosions : Object.values(opponentData.explosions);
+                    opponentExplosionArray.forEach((exp: any, index: number) => {
+                         const expId = `${opponentRole}-exp-${index}`;
+                         if (!processedOpponentExplosions.current.has(expId)) {
+                             handleExplosion({...exp, ownerId: opponentRole});
+                             processedOpponentExplosions.current.add(expId);
+                         }
                     });
                 }
-
-                if (opponentData.airstrikeTarget && !previousOpponentData?.airstrikeTarget) {
-                    if (planesRef.current.every(p => p.ownerId !== opponentRole)) {
-                        playSound('airstrike_alert');
-                        setTimeout(() => {
-                             const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
-                             planesRef.current.push({
-                                id: `plane-opp-${Date.now()}`,
-                                x: planeGoesLeft ? CANVAS_WIDTH : -120,
-                                y: 30,
-                                vx: planeGoesLeft ? -3 : 3,
-                                targetX: opponentData.airstrikeTarget,
-                                bombsDropped: false,
-                                ownerId: opponentRole
-                            });
-                        }, AIRSTRIKE_DELAY);
-                    }
+                
+                // Sync Opponent Airstrike
+                if (opponentData.airstrikeTarget && opponentData.lastAirstrikeTime > lastProcessedOpponentAirstrikeTime.current) {
+                     lastProcessedOpponentAirstrikeTime.current = opponentData.lastAirstrikeTime;
+                     playSound('airstrike_alert');
+                     setTimeout(() => {
+                         const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
+                         planesRef.current.push({
+                            id: `plane-opp-${Date.now()}`,
+                            x: planeGoesLeft ? CANVAS_WIDTH : -120,
+                            y: 30,
+                            vx: planeGoesLeft ? -3 : 3,
+                            targetX: opponentData.airstrikeTarget,
+                            bombsDropped: false,
+                            ownerId: opponentRole
+                        });
+                     }, AIRSTRIKE_DELAY);
                 }
             }
 
@@ -577,16 +582,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             lastOpponentBulletCount.current = opponentBullets.length;
 
             const opponentGrenades = opponentData.grenades || [];
-            if(opponentGrenades.length > lastOpponentGrenadeCount.current) {
-                const newGrenades = opponentGrenades.slice(lastOpponentGrenadeCount.current);
-                newGrenades.forEach((g: Grenade) => {
-                    const existingGrenade = grenadesRef.current.find(localG => localG.id === g.id);
-                    if (!existingGrenade) {
-                        grenadesRef.current.push(g);
-                    }
-                });
-            }
-            lastOpponentGrenadeCount.current = opponentGrenades.length;
+            opponentGrenades.forEach((g: Grenade) => {
+                const existingGrenade = grenadesRef.current.find(localG => localG.id === g.id);
+                if (!existingGrenade) {
+                    grenadesRef.current.push(g);
+                }
+            });
 
 
             setOpponentUI({ 
@@ -732,9 +733,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           g.fuse--;
           if (g.fuse <= 0) {
               const explosionData = { x: g.x, y: g.y, radius: GUNS.grenade.blastRadius, ownerId: g.ownerId };
-              const isOwner = g.ownerId === player.id;
-              handleExplosion(explosionData, isOwner);
-              if (isOwner) {
+              handleExplosion(explosionData);
+              if (g.ownerId === player.id) {
                  const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
                  update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
               }
@@ -766,9 +766,8 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           b.x += b.vx;
           if (b.y >= GROUND_Y + PLAYER_HEIGHT / 2) {
               const explosionData = { x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius, ownerId: b.ownerId };
-              const isOwner = b.ownerId === player.id;
-              handleExplosion(explosionData, isOwner);
-              if (isOwner) {
+              handleExplosion(explosionData);
+              if (b.ownerId === player.id) {
                 const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
                 update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
               }
@@ -889,7 +888,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             const dirMultiplier = p.dir === 'right' ? 1 : -1;
             
             grenadesRef.current.push({
-                id: `${now}-${Math.random()}`.replace('.', ''),
+                id: `${p.id}-${now}`,
                 x: p.x + (p.dir === 'right' ? PLAYER_WIDTH : 0),
                 y: p.y + PLAYER_HEIGHT / 2,
                 vx: Math.cos(angle) * power * dirMultiplier,
