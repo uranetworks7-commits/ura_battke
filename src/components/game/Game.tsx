@@ -165,9 +165,6 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
         <div className="flex-shrink-0 text-center flex flex-col items-center gap-2 pt-2">
           <p className="font-headline text-2xl text-accent">VS</p>
-           {isTargetingAirstrike && (
-              <p className="font-bold text-red-500 animate-pulse text-lg tracking-widest">MARK AIRSTRIKE LOCATION</p>
-          )}
         </div>
 
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
@@ -237,6 +234,11 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
         {gameStatus === GameStatus.WAITING && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
             <p className="text-2xl font-headline text-white animate-pulse">Waiting for opponent...</p>
+          </div>
+        )}
+        {isTargetingAirstrike && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg pointer-events-none">
+            <p className="font-bold text-red-500 animate-pulse text-2xl tracking-widest">MARK AIRSTRIKE LOCATION</p>
           </div>
         )}
       </div>
@@ -315,3 +317,5 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     </div>
   );
 }
+
+    
