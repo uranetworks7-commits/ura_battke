@@ -139,7 +139,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 <div className="flex flex-col items-center gap-1">
                     <div
                         className={cn(
-                            'p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                            'relative p-1 rounded-md cursor-pointer border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                             player.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                         )}
                         onClick={() => handleGunSelect('grenade')}
@@ -191,7 +191,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
                 <div className="flex flex-col items-center gap-1">
                   <div
                     className={cn(
-                      'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                      'relative p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                       opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
                     )}>
                       <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
@@ -330,3 +330,5 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
     </div>
   );
 }
+
+    

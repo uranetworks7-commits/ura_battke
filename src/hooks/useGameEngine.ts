@@ -193,10 +193,13 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     audioRefs.current.ak_fire = new Audio('https://files.catbox.moe/uxsgkh.mp3');
     audioRefs.current.awm_fire = new Audio('https://files.catbox.moe/dvxhe8.mp3');
     audioRefs.current.airstrike_alert = new Audio('https://files.catbox.moe/6yek7i.mp3');
-    audioRefs.current.grenade_explode = new Audio('https://files.catbox.moe/dvxhe8.mp3'); // Using awm sound for grenade too
+    audioRefs.current.grenade_explode = new Audio('https://files.catbox.moe/dvxhe8.mp3');
     
     Object.values(audioRefs.current).forEach(audio => {
-        if (audio) audio.volume = 0.5;
+        if (audio) {
+          audio.volume = 0.5;
+          audio.load();
+        }
     });
   }, []);
 
@@ -204,7 +207,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     const audio = audioRefs.current[sound];
     if(audio && !isMuted) {
       audio.currentTime = 0;
-      audio.play().catch(e => console.log('Sound play interrupted'));
+      audio.play().catch(e => console.log('Sound play interrupted:', e));
     }
   }, [isMuted]);
 
@@ -221,7 +224,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
               const finalWinnerInfo: WinnerInfo = { winner: winnerDetails, reason };
               return finalWinnerInfo;
           }
-          return; // Abort transaction
+          return; // Abort transaction if winner is already declared
       });
   }, [sRoomCode]);
 
@@ -280,7 +283,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (!planes || !planeImgRef.current?.complete) return;
         planes.forEach(p => {
             ctx.save();
-            const flip = p.vx > 0; // if vx is positive, it's moving right
+            const flip = p.vx > 0;
             ctx.translate(p.x + (flip ? 120 : 0), p.y);
             if (!flip) ctx.scale(-1, 1);
             ctx.drawImage(planeImgRef.current!, 0, 0, 120, 60);
@@ -923,3 +926,5 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeUsed: playerUI.airstrikeUsed, isTargetingAirstrike };
 }
+
+    
