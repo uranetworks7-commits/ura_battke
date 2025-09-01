@@ -18,7 +18,7 @@ type GameProps = {
 
 export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
+  const { player, opponent, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeUsed, isTargetingAirstrike } = useGameEngine(canvasRef, roomCode, playerName, playerUsername);
 
   const handleGunSelect = (gun: GunChoice) => {
     actions.selectGun(gun);
@@ -30,6 +30,17 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
   const handleFireRelease = () => {
     actions.fire();
+  };
+
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isTargetingAirstrike) {
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        // Scale click coordinates to canvas coordinates
+        const canvasX = (x / rect.width) * canvasRef.current!.width;
+        actions.setAirstrikeTarget(canvasX);
+    }
   };
 
   useEffect(() => {
@@ -100,15 +111,27 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           </div>
           <Progress value={(player.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {player.hp}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <div
-              className={cn(
-                'p-1 rounded-md cursor-pointer border-2 bg-white',
-                player.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-              )}
-              onClick={() => handleGunSelect('ak')}
-            >
-              <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+          <div className="flex items-end gap-2 mt-2">
+            <div className="flex flex-col gap-1">
+                <div
+                className={cn(
+                    'p-1 rounded-md cursor-pointer border-2 bg-white',
+                    player.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                )}
+                onClick={() => handleGunSelect('ak')}
+                >
+                <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+                </div>
+                 <div
+                    className={cn(
+                        'p-1 rounded-md cursor-pointer border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
+                        isTargetingAirstrike ? 'border-red-500 animate-pulse' : (player.gun === 'airstrike' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'),
+                        airstrikeUsed ? 'opacity-20 cursor-not-allowed' : ''
+                    )}
+                    onClick={() => !airstrikeUsed && handleGunSelect('airstrike')}
+                    >
+                    <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+                </div>
             </div>
             <div
               className={cn(
@@ -143,6 +166,9 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
 
         <div className="flex-shrink-0 text-center flex flex-col items-center gap-2 pt-2">
           <p className="font-headline text-2xl text-accent">VS</p>
+           {isTargetingAirstrike && (
+            <div className="font-bold text-red-500 animate-pulse text-sm">MARK AIRSTRIKE LOCATION</div>
+          )}
         </div>
 
         <div className="flex flex-col items-end gap-1 text-right w-2/5">
@@ -157,16 +183,15 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <Progress value={(opponent.hp / 1800) * 100} className="w-full h-3 bg-red-500/20 [&>div]:bg-red-500" />
           <p className="font-mono text-xs">HP: {opponent.hp}</p>
           {gameStatus === GameStatus.PLAYING && opponent.name !== 'Opponent' && (
-          <div className="flex items-center justify-end gap-2 mt-2">
+          <div className="flex items-end justify-end gap-2 mt-2">
             <div
               className={cn(
-                'p-1 rounded-md border-2 bg-white',
-                opponent.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-              )}
-            >
-              <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+                'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
+                opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+              )}>
+                <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
             </div>
-            <div
+             <div
               className={cn(
                 'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
                 opponent.gun === 'awm' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
@@ -174,11 +199,24 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             >
               <Image src="https://i.postimg.cc/JnDCPFfR/1756465348663.png" alt="AWM" width={48} height={24} className="w-12 h-6 object-contain" />
             </div>
-             <div className={cn(
-                'p-1 rounded-md border-2 bg-white w-[48px] h-[32px] flex items-center justify-center',
-                opponent.gun === 'grenade' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
-              )}>
-                <Image src="https://i.postimg.cc/FRLXP1mf/1756586440631.png" alt="Grenade" width={28} height={28} className="object-contain" />
+             <div className="flex flex-col gap-1">
+                 <div
+                  className={cn(
+                    'p-1 rounded-md border-2 bg-white',
+                    opponent.gun === 'ak' ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60'
+                  )}
+                >
+                  <Image src="https://i.postimg.cc/gJcNdRMB/1756463704515.png" alt="Ak" width={48} height={24} className="w-12 h-6 object-contain" />
+                </div>
+                 <div
+                    className={cn(
+                        'p-1 rounded-md border-2 bg-white h-[32px] w-[48px] flex items-center justify-center',
+                         (opponent.gun === 'airstrike' || opponent.airstrikeTarget) ? 'border-primary bg-opacity-100' : 'border-transparent opacity-60',
+                        opponent.airstrikeUsed ? 'opacity-20' : ''
+                    )}
+                    >
+                    <Image src="https://i.postimg.cc/bN7DRx1R/1756717916162.png" alt="Airstrike" width={32} height={32} className="object-contain" />
+                </div>
             </div>
           </div>
           )}
@@ -187,7 +225,16 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
       
       {/* Game Canvas */}
       <div className="relative w-full flex-1 max-w-4xl mx-auto my-2">
-        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full border-2 border-primary shadow-2xl shadow-primary/30 rounded-lg" width={800} height={450} />
+        <canvas 
+          ref={canvasRef} 
+          className={cn(
+            "absolute top-0 left-0 w-full h-full border-2 border-primary shadow-2xl shadow-primary/30 rounded-lg",
+            isTargetingAirstrike ? "cursor-crosshair" : ""
+            )} 
+          width={800} 
+          height={450} 
+          onClick={handleCanvasClick}
+          />
         {gameStatus === GameStatus.WAITING && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
             <p className="text-2xl font-headline text-white animate-pulse">Waiting for opponent...</p>
