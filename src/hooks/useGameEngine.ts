@@ -121,6 +121,7 @@ interface Bomb {
     id: string;
     x: number;
     y: number;
+    vx: number;
     vy: number;
 }
 
@@ -158,6 +159,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   const bombsRef = useRef<Bomb[]>([]);
   const airstrikeMarkerRef = useRef<number | null>(null);
   const lastOpponentBulletCount = useRef(0);
+  const lastOpponentGrenadeCount = useRef(0);
   const damageIndicatorsRef = useRef<DamageIndicator[]>([]);
   const lastFireTimeRef = useRef(0);
   const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -437,7 +439,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
     grenadeImgRef.current = new Image();
     grenadeImgRef.current.src = 'https://i.postimg.cc/FRLXP1mf/1756586440631.png';
     planeImgRef.current = new Image();
-    planeImgRef.current.src = 'https://i.postimg.cc/W3NSPxkJ/1756750935813.png';
+    planeImgRef.current.src = 'https://i.postimg.cc/VvCJZBFH/1756717841361.png';
     bombImgRef.current = new Image();
     bombImgRef.current.src = 'https://i.postimg.cc/QtXTD7xf/1756717866307.png';
 
@@ -529,27 +531,35 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = { id: opponentRole, ...opponentData };
             
             if (hadOpponent && myRole) {
+                const opponentGrenades = opponentData.grenades || [];
+                if (opponentGrenades.length < (previousOpponentData?.grenades?.length || 0)) {
+                    playSound('grenade_explode');
+                }
+
                 if (opponentData.explosions && opponentData.explosions.length > (previousOpponentData?.explosions?.length || 0)) {
                     const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
                     newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
-                        handleExplosion(exp, 'grenade_explode');
+                        explosionsRef.current.push({ ...exp, id: `exp-opp-${Date.now()}`, life: 30 });
                     });
                 }
 
+
                 if (opponentData.airstrikeTarget && !previousOpponentData?.airstrikeTarget) {
-                    playSound('airstrike_alert');
-                     setTimeout(() => {
-                         const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
-                         planesRef.current.push({
-                            id: `plane-opp-${Date.now()}`,
-                            x: planeGoesLeft ? CANVAS_WIDTH : -120,
-                            y: 30,
-                            vx: planeGoesLeft ? -3 : 3,
-                            targetX: opponentData.airstrikeTarget,
-                            bombsDropped: false,
-                            ownerId: opponentRole
-                        });
-                    }, AIRSTRIKE_DELAY);
+                    if (planesRef.current.every(p => p.ownerId !== opponentRole)) {
+                        playSound('airstrike_alert');
+                        setTimeout(() => {
+                             const planeGoesLeft = opponentData.x > CANVAS_WIDTH / 2;
+                             planesRef.current.push({
+                                id: `plane-opp-${Date.now()}`,
+                                x: planeGoesLeft ? CANVAS_WIDTH : -120,
+                                y: 30,
+                                vx: planeGoesLeft ? -3 : 3,
+                                targetX: opponentData.airstrikeTarget,
+                                bombsDropped: false,
+                                ownerId: opponentRole
+                            });
+                        }, AIRSTRIKE_DELAY);
+                    }
                 }
             }
 
@@ -573,6 +583,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = null;
             setOpponentUI({ name: 'Opponent', hp: INITIAL_HP, gun: 'ak', bullets: [], grenades: [], airstrikeUsed: false, airstrikeTarget: null });
             lastOpponentBulletCount.current = 0;
+            lastOpponentGrenadeCount.current = 0;
         }
         
         if (roomData?.player1 && roomData?.player2 && gameStatus === GameStatus.WAITING) {
@@ -588,7 +599,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
     };
-  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound, handleExplosion]);
+  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
@@ -716,9 +727,10 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             for (let i = 0; i < 4; i++) {
                 bombsRef.current.push({
                     id: `bomb-${p.id}-${i}`,
-                    x: p.x + (Math.random() * 80 - 40), // drop around the plane
-                    y: p.y + 30, // Drop from middle of plane
-                    vy: 3, // Initial bomb fall speed
+                    x: p.x + (Math.random() * 80 - 40),
+                    y: p.y + 30,
+                    vx: p.vx, // Inherit plane velocity
+                    vy: 3,
                 });
             }
         }
@@ -726,8 +738,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       planesRef.current = planesRef.current.filter(p => p.x > -150 && p.x < CANVAS_WIDTH + 150);
 
       bombsRef.current.forEach(b => {
-          b.vy += GRAVITY / 2; // Bombs accelerate
+          b.vy += GRAVITY / 2;
           b.y += b.vy;
+          b.x += b.vx;
           if (b.y >= GROUND_Y + PLAYER_HEIGHT / 2) {
               handleExplosion({ x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius }, 'awm_fire');
           }
@@ -781,6 +794,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           gun: playerData.gun,
           bullets: bulletsRef.current,
           grenades: grenadesRef.current,
+          explosions: explosionsRef.current.filter(e => e.id.includes(player.id)).map(({id, life, ...rest}) => rest), // only sync my explosions
           lastGrenadeTime: playerData.lastGrenadeTime,
           airstrikeUsed: playerData.airstrikeUsed,
           airstrikeTarget: playerData.airstrikeTarget,
@@ -880,7 +894,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
         setTimeout(() => {
             airstrikeMarkerRef.current = null;
-            if (p.id !== opponentStateRef.current?.id) { // Prevent duplicate local plane
+            if (planesRef.current.every(pl => pl.ownerId !== p.id)) {
                 const planeGoesLeft = p.x > CANVAS_WIDTH / 2;
                 planesRef.current.push({
                    id: `plane-${p.id}-${Date.now()}`,
