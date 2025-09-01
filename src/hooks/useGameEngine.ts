@@ -35,7 +35,7 @@ const GUNS = {
     blastRadius: 150,
   },
   airstrike: {
-      damage: 225, // per bomb
+      damage: 185, // per bomb
       blastRadius: 80,
   }
 };
@@ -123,6 +123,7 @@ interface Bomb {
     y: number;
     vx: number;
     vy: number;
+    ownerId: string;
 }
 
 interface Explosion {
@@ -131,6 +132,7 @@ interface Explosion {
     y: number;
     radius: number;
     life: number; // Time to live in frames
+    ownerId: string;
 }
 
 interface DamageIndicator {
@@ -380,53 +382,49 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   }, [canvasRef, gameStatus, opponentUI]);
   
-  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, sound: keyof typeof audioRefs.current) => {
+  const handleExplosion = useCallback((explosion: Omit<Explosion, 'id' | 'life'>, sound: keyof typeof audioRefs.current, isOwner: boolean) => {
     playSound(sound);
-    explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30 }); // 0.5s explosion effect
+    explosionsRef.current.push({ ...explosion, id: `exp-${Date.now()}`, life: 30, ownerId: explosion.ownerId }); // 0.5s explosion effect
 
-    const { x, y, radius } = explosion;
-    const allPlayers: (PlayerState | OpponentState | null)[] = [playerStateRef.current, opponentStateRef.current];
-    
-    allPlayers.forEach(p => {
-        if (!p) return;
+    if (!isOwner) return; // Only the owner of the explosion calculates damage
+
+    const { x, y, radius, ownerId } = explosion;
+    const player = playerStateRef.current;
+    const opponent = opponentStateRef.current;
+
+    const updates: { [key: string]: any } = {};
+    let playerHp = player?.hp ?? INITIAL_HP;
+    let opponentHp = opponent?.hp ?? INITIAL_HP;
+
+    const damagePlayer = (p: PlayerState | OpponentState) => {
         const dist = Math.hypot(p.x + PLAYER_WIDTH / 2 - x, p.y + PLAYER_HEIGHT / 2 - y);
-        const falloff = 1 - (dist / radius);
-
         if (dist < radius) {
             const damageType = sound === 'awm_fire' ? 'airstrike' : 'grenade';
-            const damage = Math.round(GUNS[damageType].damage * falloff);
-            
+            const damage = Math.round(GUNS[damageType].damage * (1 - (dist / radius)));
             if (damage > 0) {
-                if (isNaN(p.hp)) return;
-                const newHp = Math.max(0, p.hp - damage);
-                
-                const role = p.id === playerStateRef.current?.id ? roleRef.current : (roleRef.current === 'player1' ? 'player2' : 'player1');
-
-                if (p.id !== playerStateRef.current?.id) {
-                    damageIndicatorsRef.current.push({
-                        id: `dmg-${Date.now()}`,
-                        amount: damage,
-                        x: p.x + PLAYER_WIDTH / 2,
-                        y: p.y - 10,
-                        life: 60
-                    });
-                } else {
-                   if (playerStateRef.current) playerStateRef.current.hp = newHp;
-                }
-                
-                if (role) {
-                    update(ref(db, `${sRoomCode}/${role}`), { hp: newHp });
-                }
-                
-                if (newHp <= 0 && opponentStateRef.current && p.id === opponentStateRef.current.id) {
-                    declareWinner({ name: playerStateRef.current!.name, username: playerStateRef.current!.username }, 'elimination');
-                } else if (newHp <= 0 && p.id === playerStateRef.current?.id && opponentStateRef.current) {
-                    declareWinner({ name: opponentStateRef.current.name, username: opponentStateRef.current.username }, 'elimination');
-                }
+                 if (p.id === player?.id) {
+                     playerHp = Math.max(0, playerHp - damage);
+                 } else {
+                     opponentHp = Math.max(0, opponentHp - damage);
+                     damageIndicatorsRef.current.push({ id: `dmg-${Date.now()}`, amount: damage, x: p.x + PLAYER_WIDTH / 2, y: p.y - 10, life: 60 });
+                 }
             }
         }
-    });
-}, [sRoomCode, playSound, declareWinner]);
+    };
+    
+    if (player) damagePlayer(player);
+    if (opponent) damagePlayer(opponent);
+    
+    if (player) updates[`${sRoomCode}/${player.id}/hp`] = playerHp;
+    if (opponent) updates[`${sRoomCode}/${opponent.id}/hp`] = opponentHp;
+    
+    update(ref(db), updates);
+
+    if (player && opponent) {
+        if (playerHp <= 0) declareWinner({ name: opponent.name, username: opponent.username }, 'elimination');
+        else if (opponentHp <= 0) declareWinner({ name: player.name, username: player.username }, 'elimination');
+    }
+  }, [sRoomCode, playSound, declareWinner]);
 
   useEffect(() => {
     goOnline(db);
@@ -473,7 +471,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                 displayName = playerName.replace(HACKER_CODE_226, '');
             }
 
-            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, airstrikeUsed: false, airstrikeTarget: null };
+            const basePlayer = { name: displayName, username: playerUsername, hp: INITIAL_HP, isHacker, hackerType, lastUpdate: serverTimestamp(), gun: 'ak' as GunChoice, lastGrenadeTime: 0, airstrikeUsed: false, airstrikeTarget: null, explosions: [] };
             
             const p1 = roomData?.player1;
             const p2 = roomData?.player2;
@@ -540,6 +538,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                     const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
                     newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
                         explosionsRef.current.push({ ...exp, id: `exp-opp-${Date.now()}`, life: 30 });
+                        playSound(exp.radius > 100 ? 'grenade_explode' : 'awm_fire');
                     });
                 }
 
@@ -599,7 +598,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
     };
-  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound]);
+  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound, handleExplosion]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
@@ -652,13 +651,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
   useEffect(() => {
     let animationFrameId: number;
     const gameLoop = () => {
-      if (!playerStateRef.current) {
+      const player = playerStateRef.current;
+      if (!player) {
         draw();
         animationFrameId = requestAnimationFrame(gameLoop);
         return;
       }
-      
-      const player = playerStateRef.current;
       
       if(isThrowingGrenadeRef.current) {
           throwPowerRef.current = Math.min(30, throwPowerRef.current + 0.5);
@@ -710,11 +708,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
           g.fuse--;
           if (g.fuse <= 0) {
-              const explosionData = { x: g.x, y: g.y, radius: GUNS.grenade.blastRadius };
-              handleExplosion(explosionData, 'grenade_explode');
-              if (g.ownerId === playerStateRef.current?.id) {
-                const playerExplosions = opponentStateRef.current?.explosions || [];
-                update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...playerExplosions, explosionData] });
+              const explosionData = { x: g.x, y: g.y, radius: GUNS.grenade.blastRadius, ownerId: g.ownerId };
+              handleExplosion(explosionData, 'grenade_explode', g.ownerId === player.id);
+              if (g.ownerId === player.id) {
+                 const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
+                 update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
               }
           }
       });
@@ -729,8 +727,9 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
                     id: `bomb-${p.id}-${i}`,
                     x: p.x + (Math.random() * 80 - 40),
                     y: p.y + 30,
-                    vx: p.vx, // Inherit plane velocity
-                    vy: 3,
+                    vx: p.vx * 0.5 + (Math.random() - 0.5), // Inherit some plane velocity
+                    vy: 3 + Math.random() * 2,
+                    ownerId: p.ownerId,
                 });
             }
         }
@@ -738,11 +737,16 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
       planesRef.current = planesRef.current.filter(p => p.x > -150 && p.x < CANVAS_WIDTH + 150);
 
       bombsRef.current.forEach(b => {
-          b.vy += GRAVITY / 2;
+          b.vy += GRAVITY / 4; // Bombs fall slower than players
           b.y += b.vy;
           b.x += b.vx;
           if (b.y >= GROUND_Y + PLAYER_HEIGHT / 2) {
-              handleExplosion({ x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius }, 'awm_fire');
+              const explosionData = { x: b.x, y: b.y - 10, radius: GUNS.airstrike.blastRadius, ownerId: b.ownerId };
+              handleExplosion(explosionData, 'awm_fire', b.ownerId === player.id);
+              if (b.ownerId === player.id) {
+                const myExistingExplosions = (playerStateRef.current?.explosions || []).map(({id, life, ...rest}) => rest);
+                update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...myExistingExplosions, explosionData] });
+              }
           }
       });
       bombsRef.current = bombsRef.current.filter(b => b.y < GROUND_Y + PLAYER_HEIGHT / 2);
@@ -794,7 +798,6 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           gun: playerData.gun,
           bullets: bulletsRef.current,
           grenades: grenadesRef.current,
-          explosions: explosionsRef.current.filter(e => e.id.includes(player.id)).map(({id, life, ...rest}) => rest), // only sync my explosions
           lastGrenadeTime: playerData.lastGrenadeTime,
           airstrikeUsed: playerData.airstrikeUsed,
           airstrikeTarget: playerData.airstrikeTarget,
