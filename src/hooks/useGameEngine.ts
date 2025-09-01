@@ -86,6 +86,7 @@ interface OpponentState extends Omit<PlayerState, 'vy' | 'vx' | 'lastGrenadeTime
     bullets?: Bullet[];
     grenades?: Grenade[];
     lastGrenadeTime?: number;
+    explosions?: Omit<Explosion, 'id' | 'life'>[];
 }
 
 interface Bullet {
@@ -528,9 +529,11 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
             opponentStateRef.current = { id: opponentRole, ...opponentData };
             
             if (hadOpponent && myRole) {
-                const opponentJustThrewGrenade = opponentData.grenades?.length > (previousOpponentData?.grenades?.length || 0);
-                if (opponentJustThrewGrenade && opponentData.grenades) {
-                     setTimeout(() => playSound('grenade_explode'), GRENADE_FUSE * (1000/60));
+                if (opponentData.explosions && opponentData.explosions.length > (previousOpponentData?.explosions?.length || 0)) {
+                    const newExplosions = opponentData.explosions.slice(previousOpponentData?.explosions?.length || 0);
+                    newExplosions.forEach((exp: Omit<Explosion, 'id' | 'life'>) => {
+                        handleExplosion(exp, 'grenade_explode');
+                    });
                 }
 
                 if (opponentData.airstrikeTarget && !previousOpponentData?.airstrikeTarget) {
@@ -585,7 +588,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
         if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
         off(roomPathRef.current, 'value', handleRoomValue);
     };
-  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound]);
+  }, [sRoomCode, playerName, playerUsername, toast, declareWinner, gameStatus, winner, playSound, handleExplosion]);
   
    useEffect(() => {
     if (gameStatus === GameStatus.WAITING) {
@@ -696,7 +699,12 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
           g.fuse--;
           if (g.fuse <= 0) {
-              handleExplosion({ x: g.x, y: g.y, radius: GUNS.grenade.blastRadius }, 'grenade_explode');
+              const explosionData = { x: g.x, y: g.y, radius: GUNS.grenade.blastRadius };
+              handleExplosion(explosionData, 'grenade_explode');
+              if (g.ownerId === playerStateRef.current?.id) {
+                const playerExplosions = opponentStateRef.current?.explosions || [];
+                update(ref(db, `${sRoomCode}/${roleRef.current}`), { explosions: [...playerExplosions, explosionData] });
+              }
           }
       });
       grenadesRef.current = grenadesRef.current.filter(g => g.fuse > 0);
@@ -926,5 +934,3 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
 
   return { player: playerUI, opponent: opponentUI, gameStatus, winner, actions, cheaterDetected, isMuted, grenadeCooldown, awmCooldown, airstrikeUsed: playerUI.airstrikeUsed, isTargetingAirstrike };
 }
-
-    
