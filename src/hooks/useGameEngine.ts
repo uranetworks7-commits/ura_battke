@@ -832,7 +832,7 @@ export function useGameEngine(canvasRef: React.RefObject<HTMLCanvasElement>, roo
           lastGrenadeTime: playerData.lastGrenadeTime,
           lastAirstrikeTime: playerData.lastAirstrikeTime,
           airstrikesLeft: playerData.airstrikesLeft,
-          airstrikeTarget: playerData.airstrikeTarget,
+          airstrikeTarget: playerData.airstrikeTarget || null,
           lastUpdate: serverTimestamp()
         });
       }
