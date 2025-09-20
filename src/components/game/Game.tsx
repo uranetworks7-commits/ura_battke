@@ -262,7 +262,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <Button 
             onPointerDown={actions.startMoveLeft}
             onPointerUp={actions.stopMoveLeft}
-            onMouseLeave={actions.stopMoveLeft}
+            onPointerCancel={actions.stopMoveLeft}
             className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"
           >
             <ArrowLeft size={32} />
@@ -270,7 +270,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <Button 
             onPointerDown={actions.startMoveRight}
             onPointerUp={actions.stopMoveRight}
-            onMouseLeave={actions.stopMoveRight}
+            onPointerCancel={actions.stopMoveRight}
             className="bg-primary/80 hover:bg-primary/90 text-background select-none h-14 w-14 sm:h-16 sm:w-16 rounded-full"
           >
             <ArrowRight size={32} />
@@ -281,7 +281,7 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
           <Button 
             onPointerDown={handleFirePress}
             onPointerUp={handleFireRelease}
-            onMouseLeave={handleFireRelease}
+            onPointerCancel={handleFireRelease}
             onTouchStart={(e) => { e.preventDefault(); handleFirePress(); }}
             onTouchEnd={(e) => { e.preventDefault(); handleFireRelease(); }}
             className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"
