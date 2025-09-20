@@ -282,8 +282,6 @@ export function Game({ roomCode, playerName, playerUsername, onExit }: GameProps
             onPointerDown={handleFirePress}
             onPointerUp={handleFireRelease}
             onPointerCancel={handleFireRelease}
-            onTouchStart={(e) => { e.preventDefault(); handleFirePress(); }}
-            onTouchEnd={(e) => { e.preventDefault(); handleFireRelease(); }}
             className="bg-red-600 hover:bg-red-700 text-white select-none h-20 w-20 sm:h-24 sm:w-24 rounded-full text-lg"
           ><Zap size={40} /></Button>
         </div>
