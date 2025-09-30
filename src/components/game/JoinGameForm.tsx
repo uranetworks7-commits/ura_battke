@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { ref, get } from 'firebase/database';
+import { ref, get, set } from 'firebase/database';
 import { Loader2, Gamepad2, Eye, BookOpen, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,11 +17,12 @@ type JoinGameFormProps = {
   onStartSpectating: (room: string) => void;
 };
 
-const validUsernames = new Set([
+const initialUsernames = [
   'utkarshx', 'rehan@24', 'ayush@5926', 'Saumy', 'saumy', 'ayush@558', 'rehan ali', 'xrehan', 's', 'arpit', 
   'o', 'gg', 'kk', 'sajid', 'VLC179', 'b', 'k', 'h', 'm', 'ayush@559', 'romitverma', 'romit verma', 'cv', 
-  'ff', 'test12345678@c.us', 'ij', 'jj', 'CSK', 'bb', 'suraj@23', 'arman@45', 'oo', 'vijomc', 'vv', 'main', 'yyt', 'uu'
-]);
+  'ff', 'test12345678@c.us', 'ij', 'jj', 'CSK', 'bb', 'suraj@23', 'arman@45', 'oo', 'vijomc', 'vv', 'main', 'yyt', 'uu',
+  'kanha'
+];
 
 const sanitizeKey = (key: string) => key.replace(/[.#$[\]]/g, '_');
 
@@ -35,11 +36,46 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
   const [spectatorRoom, setSpectatorRoom] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
+  const [validUsernames, setValidUsernames] = useState<Set<string> | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const usernamesRef = ref(db, 'validUsernames');
+    get(usernamesRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        const usernamesFromDb = snapshot.val();
+        if (Array.isArray(usernamesFromDb)) {
+          setValidUsernames(new Set(usernamesFromDb));
+        } else {
+          // Fallback or handle unexpected data structure
+          setValidUsernames(new Set(initialUsernames));
+        }
+      } else {
+        // If it doesn't exist, create it
+        set(usernamesRef, initialUsernames).then(() => {
+          setValidUsernames(new Set(initialUsernames));
+        });
+      }
+    }).catch(error => {
+        console.error("Failed to fetch or set usernames:", error);
+        // Fallback to local list on error
+        setValidUsernames(new Set(initialUsernames));
+    });
+  }, []);
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    if (!validUsernames) {
+      toast({
+        title: 'Validating...',
+        description: 'Still fetching username list. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
+    }
     
     const currentRoom = room.trim();
     const currentName = name.trim();
@@ -187,8 +223,8 @@ export function JoinGameForm({ onStartGame, onStartSpectating }: JoinGameFormPro
                     </div>
                   </CardContent>
                   <CardFooter className="flex gap-2">
-                    <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading || isReloading}>
-                      {isLoading ? <Loader2 className="animate-spin" /> : 'Start'}
+                    <Button type="submit" className="w-full font-headline bg-primary hover:bg-primary/80 text-background" disabled={isLoading || isReloading || !validUsernames}>
+                      {isLoading || !validUsernames ? <Loader2 className="animate-spin" /> : 'Start'}
                     </Button>
                     <Button type="button" variant="destructive" size="icon" onClick={handleReload} disabled={isLoading || isReloading}>
                       {isReloading ? <Loader2 className="animate-spin" /> : <Trash2 />}
